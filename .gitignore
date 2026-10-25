@@ -1,0 +1,17 @@
+# Xcode
+DerivedData/
+.build/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+#*.xcodeproj/
+
+# idea
+.idea/
+
+# macOS
+.DS_Store
+
+# AI workspace
+.opencode/**
