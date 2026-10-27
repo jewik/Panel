@@ -7,8 +7,8 @@ struct SettingsUI: View {
         }
         .frame(width: 600, height: 150)
         .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.blue.opacity(0.5))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.orange.opacity(0.2))
         )
     }
 }

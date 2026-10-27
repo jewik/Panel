@@ -24,49 +24,43 @@ final class PanelController {
         self.panelState = panelState
         
     }
-    private func setPanelMode(_ mode: PanelMode) {
-        withAnimation (.custsmooth) {
-            panelState.panelMode = mode
-        }
-    }
+//    private func setPanelMode(_ mode: PanelMode) {
+//        withAnimation (.custsmooth) {
+//            panelState.panelMode = mode
+//        }
+//    }
     
-    private func setExpandedPreset(_ preset: ExpandedPreset) {
+    private func setPreset(_ preset: PanelPreset) {
         withAnimation (.custsmooth) {
-            panelState.expandedPreset = preset
+            panelState.preset = preset
         }
     }
     
     private var autoPinActive: Bool {
-        panelState.panelMode == .expanded
-        && panelState.expandedPreset == .settings
+        panelState.preset != .collapsed
+        && panelState.preset == .settings
         && !panelState.isAutoPinSuppressed
     }
     
-    func getPanelMode() -> PanelMode {
-        panelState.panelMode
+    func getPreset() -> PanelPreset {
+        panelState.preset
     }
     
-    func getExpandedPreset() -> ExpandedPreset {
-        panelState.expandedPreset
-    }
-    
-    func showCollapsedPreset() {
+    func collapse() {
         if !isPanelPinned() {
-            setPanelMode(.collapsed)
+            setPreset(.collapsed)
         }
     }
     
-    func showExpandedPreset(_ preset: ExpandedPreset) {
+    func showPreset(_ preset: PanelPreset) {
         if preset != .settings {
             panelState.isAutoPinSuppressed = false
         }
-        
-        setPanelMode(.expanded)
-        setExpandedPreset(preset)
+        setPreset(preset)
     }
     
-    func expandedPresetIs(_ preset: ExpandedPreset) -> Bool {
-        preset == panelState.expandedPreset
+    func checkPreset(_ preset: PanelPreset) -> Bool {
+        preset == panelState.preset
     }
     
     func togglePinned(){

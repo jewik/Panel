@@ -33,14 +33,18 @@ struct NavigationRowView: View {
             
             DotButton(
                 color: .yellow,
-                showInner: controller.expandedPresetIs(.home),
+                showInner: controller.checkPreset(.home),
                 action: {
-                    controller.showExpandedPreset(.home)
+                    controller.showPreset(.home)
                 },
                 innerContent: {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.yellow)
+                    Image(systemName:
+                            controller.checkPreset(.home) ?
+                          "house.fill":
+                            "house"
+                    )
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.yellow)
                 }
             )
             //
@@ -51,9 +55,13 @@ struct NavigationRowView: View {
                     controller.togglePinned()
                 },
                 innerContent: {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.green)
+                    Image(
+                        systemName: controller.isPanelPinned() ?
+                        "pin.fill":
+                            "pin"
+                    )
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.green)
                 }
             )
             
@@ -64,21 +72,25 @@ struct NavigationRowView: View {
             
             DotButton(
                 color: .cyan,
-                showInner: controller.expandedPresetIs(.fastfolder),
+                showInner: controller.checkPreset(.fastfolder),
                 action: {
-                    controller.showExpandedPreset(.fastfolder)
+                    controller.showPreset(.fastfolder)
                 },
                 innerContent: {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.cyan)
+                    Image(
+                        systemName: controller.checkPreset(.fastfolder) ?
+                        "folder.fill":
+                            "folder"
+                    )
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.cyan)
                 }
             )
             DotButton(
                 color: .indigo,
-                showInner: controller.expandedPresetIs(.airdrop),
+                showInner: controller.checkPreset(.airdrop),
                 action: {
-                    controller.showExpandedPreset(.airdrop)
+                    controller.showPreset(.airdrop)
                 },
                 innerContent: {
                     Image(systemName: "airplayaudio")
@@ -89,14 +101,18 @@ struct NavigationRowView: View {
             
             DotButton(
                 color: .purple,
-                showInner: controller.expandedPresetIs(.settings),
+                showInner: controller.checkPreset(.settings),
                 action: {
-                    controller.showExpandedPreset(.settings)
+                    controller.showPreset(.settings)
                 },
                 innerContent: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.purple)
+                    Image(systemName:
+                            controller.checkPreset(.settings) ?
+                          "gearshape.fill":
+                            "gearshape"
+                    )
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.purple)
                 }
             )
         }
@@ -107,7 +123,7 @@ struct NavigationRowView: View {
     ZStack(alignment: .center) {
         Capsule()
             .fill(.black)
-            
+        
         
         NavigationRowView(
             terminateApplication: { NSApp.terminate(nil) }
@@ -115,7 +131,7 @@ struct NavigationRowView: View {
         
     }
     .frame(width: 160, height: 30)
-//    .background(.red.opacity(0.4))
+    //    .background(.red.opacity(0.4))
     .frame(width: 200, height: 100)
     .environment(AppContainer().controller)
 }

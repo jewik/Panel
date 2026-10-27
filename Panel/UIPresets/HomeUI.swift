@@ -8,18 +8,8 @@ import SwiftUI
 
 struct HomeUI: View {
 
-    
     var body: some View {
-        ZStack(alignment: .center) {
-            RoundedRectangle(cornerRadius: 30)
-                .fill(.blue.opacity(0.1))
-                
-            
-            Text("Home")
-        }
-        .padding(10)
-        .frame(width: 300, height: 100)
-
+        FastFolderView()
     }
     
 }

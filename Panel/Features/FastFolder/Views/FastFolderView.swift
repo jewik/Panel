@@ -15,7 +15,7 @@ struct FastFolderView: View {
     private let itemWidth: CGFloat = 76
     private let itemSpacing: CGFloat = 8
     private let horizontalPadding: CGFloat = 10
-    private let shelfHeight: CGFloat = 116
+    private let shelfHeight: CGFloat = 100
     private let placeholderWidth: CGFloat = 400
     private let maximumShelfWidth: CGFloat = 900
 
@@ -33,11 +33,11 @@ struct FastFolderView: View {
     var body: some View {
         content
             .frame(width: shelfWidth, height: shelfHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(.cyan.opacity(0.1))
-            )
-            .onAppear {
+//            .background(
+//                RoundedRectangle(cornerRadius: 30, style: .continuous)
+//                    .fill(.cyan.opacity(0.1))
+//            )
+            .task {
                 store.refresh()
             }
     }
@@ -81,7 +81,7 @@ struct FastFolderView: View {
         help: String
     ) -> some View {
         Button {
-            controller.showExpandedPreset(.settings)
+            controller.showPreset(.settings)
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: systemName)

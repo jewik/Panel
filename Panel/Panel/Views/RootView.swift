@@ -23,7 +23,7 @@ struct RootView: View {
         VStack(alignment: .center ,spacing: 10){
             
             
-            if controller.getPanelMode() == .expanded {
+            if !controller.checkPreset(.collapsed) {
                 navigation
                     .transition(.collapseExpandTransition)
             }
@@ -44,6 +44,8 @@ struct RootView: View {
                         }
                     }
                 
+
+                
             }
             
             
@@ -58,14 +60,14 @@ struct RootView: View {
             }
             .onChange(of: isDragging) {oldValue, newValue in
                 if newValue {
-                    controller.showExpandedPreset(.airdrop)
+                    controller.showPreset(.airdrop)
                 }
             }
             
         }
         .onContinuousHover{ phase in
             if phase == .ended {
-                controller.showCollapsedPreset()
+                controller.collapse()
                 Log.ui.info("Hover ended, collapse preset called")
             }
         }
@@ -80,7 +82,7 @@ struct RootView: View {
             UnionPanelShape(radiusRules: panelRadiusRules)
                 .rotation(.degrees(180))
                 .fill(.black)
-                .shadow(color: controller.getPanelMode() == .expanded ? .black : .clear, radius: 20)
+                .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
             
             
         }
@@ -96,25 +98,34 @@ struct RootView: View {
     
     @ViewBuilder
     private var content : some View {
-        ZStack(alignment: .top) {
-            
-            switch controller.getPanelMode() {
+        ZStack(alignment: .bottom){
+            switch controller.getPreset() {
             case .collapsed:
-                CollapsedContentView()
+                EmptyView()
                     .transition(.collapseExpandTransition)
-            case .expanded:
-                ExpandedContentView().transition(.collapseExpandTransition)
-                
+            case .home:
+                HomeUI()
+                    .transition(.collapseExpandTransition)
+            case .fastfolder:
+                FastFolderUI()
+                    .transition(.collapseExpandTransition)
+            case .airdrop:
+                AirDropUI()
+                    .transition(.collapseExpandTransition)
+            case .settings:
+                SettingsUI()
+                    .transition(.collapseExpandTransition)
             }
+            
+            bar
         }
     }
     
-    @ViewBuilder
     private var navigation: some View {
         ZStack(alignment: .center) {
             Capsule()
                 .fill(.black)
-                .shadow(color: controller.getPanelMode() == .expanded ? .black : .clear, radius: 20)
+                .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
  
             
             //            Color.clear
@@ -127,7 +138,10 @@ struct RootView: View {
             
         }
         .frame(width: 160, height: 30)
-        
+    }
+    
+    private var bar: some View {
+        BarView()
     }
     
 }

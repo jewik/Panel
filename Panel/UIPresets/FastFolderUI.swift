@@ -20,7 +20,7 @@ struct FastFolderUI: View {
 
         FastFolderUI()
     }
-    .frame(width: 620, height: 160, alignment: .top)
+    .frame(width: 620, height: 150, alignment: .top)
     .environment(
         makePreviewFastFolderStore([
             PreviewFastFolder(name: "Projects", color: .blue, tags: ["Work"]),
@@ -38,7 +38,7 @@ struct FastFolderUI: View {
 
         FastFolderUI()
     }
-    .frame(width: 620, height: 160, alignment: .top)
+    .frame(width: 620, height: 150, alignment: .top)
     .environment(makePreviewFastFolderStore([]))
     .environment(PanelController(panelState: PanelState()))
 }
@@ -50,7 +50,7 @@ struct FastFolderUI: View {
 
         FastFolderUI()
     }
-    .frame(width: 620, height: 160, alignment: .top)
+    .frame(width: 620, height: 150, alignment: .top)
     .environment(
         makePreviewFastFolderStore([
             PreviewFastFolder(name: "Projects", color: .blue, isAvailable: false),

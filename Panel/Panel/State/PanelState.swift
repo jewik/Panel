@@ -3,17 +3,18 @@
 import Observation
 import SwiftUI
 
-enum ExpandedPreset {
+enum PanelPreset {
+    case collapsed
     case home
     case fastfolder
     case airdrop
     case settings
 }
 
-enum PanelMode {
-    case collapsed
-    case expanded
-}
+//enum PanelMode {
+//    case collapsed
+//    case expanded
+//}
 
 
 
@@ -24,7 +25,7 @@ final class PanelState {
     var isPanelPinned: Bool = false
     var isAutoPinSuppressed: Bool = false
     
-    var panelMode: PanelMode = .collapsed
-    var expandedPreset: ExpandedPreset = .home
+//    var panelMode: PanelMode = .collapsed
+    var preset: PanelPreset = .collapsed
 
 }

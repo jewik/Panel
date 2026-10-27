@@ -37,7 +37,7 @@ struct FastFolderItemView: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: "folder.fill")
-                    .font(.system(size: 34, weight: .regular))
+                    .font(.system(size: 50, weight: .regular))
                     .foregroundStyle(tagColor)
                     .shadow(color: tagColor.opacity(isHovered ? 0.7 : 0), radius: 6)
 
@@ -49,13 +49,8 @@ struct FastFolderItemView: View {
                     .frame(width: 76)
             }
             .frame(width: 76, height: 96)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.white.opacity(isHovered ? 0.08 : 0))
-            )
-            .shadow(color: .black.opacity(isHovered ? 0.35 : 0), radius: 6, y: 3)
             .offset(y: isHovered ? -3 : 0)
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+//            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
