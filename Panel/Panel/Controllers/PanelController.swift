@@ -9,6 +9,7 @@
 import SwiftUI
 import AppKit
 import Observation
+import os
 
 @MainActor
 @Observable
@@ -35,6 +36,12 @@ final class PanelController {
         }
     }
     
+    private var autoPinActive: Bool {
+        panelState.panelMode == .expanded
+        && panelState.expandedPreset == .settings
+        && !panelState.isAutoPinSuppressed
+    }
+    
     func getPanelMode() -> PanelMode {
         panelState.panelMode
     }
@@ -44,12 +51,16 @@ final class PanelController {
     }
     
     func showCollapsedPreset() {
-        if !panelState.isPanelPinned {
+        if !isPanelPinned() {
             setPanelMode(.collapsed)
         }
     }
     
     func showExpandedPreset(_ preset: ExpandedPreset) {
+        if preset != .settings {
+            panelState.isAutoPinSuppressed = false
+        }
+        
         setPanelMode(.expanded)
         setExpandedPreset(preset)
     }
@@ -59,7 +70,12 @@ final class PanelController {
     }
     
     func togglePinned(){
-        panelState.isPanelPinned.toggle()
+        if autoPinActive {
+            panelState.isAutoPinSuppressed = true
+            Log.ui.debug("Settings auto-pin suppressed by user")
+        } else {
+            panelState.isPanelPinned.toggle()
+        }
     }
     func pinPanel(){
         panelState.isPanelPinned = true
@@ -69,7 +85,7 @@ final class PanelController {
     }
     
     func isPanelPinned() -> Bool {
-        panelState.isPanelPinned
+        panelState.isPanelPinned || autoPinActive
     }
     
     func triggerMacHaptic() {

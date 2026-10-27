@@ -17,7 +17,7 @@ final class AppContainer {
     
     let airDropService: AirDropService
     
-//    let fastFolderStore: FastFolderStore
+    let fastFolderStore: FastFolderStore
     
     
     init() {
@@ -29,7 +29,10 @@ final class AppContainer {
             panelState: panelState
         )
         
-//        self.fastFolderStore = FastFolderStore()
+        self.fastFolderStore = FastFolderStore(
+            storage: UserDefaultsFastFolderStorage(),
+            bookmarkService: FastFolderBookmarkService()
+        )
         
         Log.general.info("AppContainer init finished")
         

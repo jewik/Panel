@@ -119,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let rootView = RootView()
             .environment(container.controller)
             .environment(container.airDropService)
+            .environment(container.fastFolderStore)
         
         let hostingView = NSHostingView(
             rootView: rootView

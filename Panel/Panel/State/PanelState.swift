@@ -22,6 +22,7 @@ final class PanelState {
     
     var useGlassPanelSurface: Bool = false
     var isPanelPinned: Bool = false
+    var isAutoPinSuppressed: Bool = false
     
     var panelMode: PanelMode = .collapsed
     var expandedPreset: ExpandedPreset = .home
