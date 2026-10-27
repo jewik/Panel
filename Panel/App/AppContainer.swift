@@ -8,8 +8,7 @@
 import os
 import Observation
 
-@MainActor
-@Observable
+@MainActor @Observable
 final class AppContainer {
     
     private let panelState: PanelState
