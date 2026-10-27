@@ -4,18 +4,16 @@ import SwiftUI
 import UniformTypeIdentifiers
 import os
 
-struct PanelView: View {
+struct RootView: View {
     
     @Environment(PanelController.self) private var controller
     
     @State private var contentSize: CGSize = .zero
-    @State private var resizeAnimation: Animation = .smooth
-    @State private var isPanelHovered: Bool = false
     @State private var isDragging: Bool = false
     
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
-        ear: { height in min(height / 3, 30) },
-        angle: { height in min(height / 3 * 2, 50) }
+        ear: { height in min(height / 4, 40) },
+        angle: { height in min(height / 4 * 3, 50) }
     )
     
     
@@ -29,7 +27,7 @@ struct PanelView: View {
                 navigation
                     .transition(.collapseExpandTransition)
             }
-                
+            
             ZStack (alignment: .bottom){
                 
                 surface
@@ -46,12 +44,7 @@ struct PanelView: View {
                         }
                     }
                 
-                
-                
-                
-                
             }
-            
             
             
             // handle airdrop
@@ -76,16 +69,19 @@ struct PanelView: View {
                 Log.ui.info("Hover ended, collapse preset called")
             }
         }
-        .frame(width: 800, height: 300, alignment: .bottom)
+        .frame(width: 1000, height: 400, alignment: .bottom)
         //        .background(.red)
     }
     
     @ViewBuilder
     private var surface : some View {
         ZStack (alignment: .top) {
+            
             UnionPanelShape(radiusRules: panelRadiusRules)
                 .rotation(.degrees(180))
                 .fill(.black)
+                .shadow(color: controller.getPanelMode() == .expanded ? .black : .clear, radius: 20)
+            
             
         }
         .frame(
@@ -94,6 +90,8 @@ struct PanelView: View {
             height: contentSize.height,
             alignment: .bottom
         )
+        
+        
     }
     
     @ViewBuilder
@@ -116,13 +114,19 @@ struct PanelView: View {
         ZStack(alignment: .center) {
             Capsule()
                 .fill(.black)
-                .frame(width: 80, height: 30)
-
+                .shadow(color: controller.getPanelMode() == .expanded ? .black : .clear, radius: 20)
+ 
+            
+            //            Color.clear
+            //                .glassEffect(.clear, in: Capsule())
+            //                .frame(width: 80, height: 30)
+            
             NavigationRowView(
                 terminateApplication: { NSApp.terminate(nil) }
             )
-
+            
         }
+        .frame(width: 160, height: 30)
         
     }
     
@@ -131,7 +135,7 @@ struct PanelView: View {
 
 
 #Preview {
-    PanelView()
+    RootView()
         .environment(AppContainer().controller)
         .environment(AppContainer().airDropService)
         .background(.gray.opacity(0.1))

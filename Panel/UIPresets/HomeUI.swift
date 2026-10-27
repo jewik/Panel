@@ -13,13 +13,13 @@ struct HomeUI: View {
         ZStack(alignment: .center) {
             RoundedRectangle(cornerRadius: 30)
                 .fill(.blue.opacity(0.1))
-                .padding(10)
-                .frame(width: 300, height: 100)
+                
             
             Text("Home")
         }
+        .padding(10)
+        .frame(width: 300, height: 100)
 
-//        .frame(width: 600, height: 150)
     }
     
 }

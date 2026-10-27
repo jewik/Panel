@@ -34,7 +34,7 @@ final class PanelController {
             panelState.expandedPreset = preset
         }
     }
-
+    
     func getPanelMode() -> PanelMode {
         panelState.panelMode
     }
@@ -44,22 +44,36 @@ final class PanelController {
     }
     
     func showCollapsedPreset() {
-//        withAnimation (.custsmooth) {
+        if !panelState.isPanelPinned {
             setPanelMode(.collapsed)
-//        }
+        }
     }
     
     func showExpandedPreset(_ preset: ExpandedPreset) {
-//        if ScreenUnlockObserveService.shared.isLocked { return }
-        
-//        withAnimation (.custsmooth) {
-            setPanelMode(.expanded)
-            setExpandedPreset(preset)
-        //        }
+        setPanelMode(.expanded)
+        setExpandedPreset(preset)
     }
-
+    
+    func expandedPresetIs(_ preset: ExpandedPreset) -> Bool {
+        preset == panelState.expandedPreset
+    }
+    
+    func togglePinned(){
+        panelState.isPanelPinned.toggle()
+    }
+    func pinPanel(){
+        panelState.isPanelPinned = true
+    }
+    func unpinPanel(){
+        panelState.isPanelPinned = false
+    }
+    
+    func isPanelPinned() -> Bool {
+        panelState.isPanelPinned
+    }
+    
     func triggerMacHaptic() {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
     }
-
+    
 }

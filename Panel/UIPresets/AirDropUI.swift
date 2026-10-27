@@ -13,6 +13,7 @@ struct AirDropUI: View {
         ZStack(alignment: .bottom) {
             AirDropView()
         }
+        .frame(width: 400, height: 100, alignment: .bottom)
     }
 }
 

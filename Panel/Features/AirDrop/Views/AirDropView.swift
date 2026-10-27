@@ -27,7 +27,7 @@ struct AirDropView : View {
             }
         }
         .padding(10)
-        .frame(width: 300, height: 100, alignment: .bottom)
+        .frame(width: 400, height: 100, alignment: .bottom)
 //        .background(Color.pink.opacity(0.1))
         
         .onDrop(

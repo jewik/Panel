@@ -23,10 +23,16 @@ struct ExpandedContentView: View {
         switch controller.getExpandedPreset() {
         case .home:
             HomeUI()
+                .transition(.collapseExpandTransition)
+        case .fastfolder:
+            FastFolderUI()
+                .transition(.collapseExpandTransition)
         case .airdrop:
             AirDropUI()
+                .transition(.collapseExpandTransition)
         case .settings:
             SettingsUI()
+                .transition(.collapseExpandTransition)
         }
         
     }
