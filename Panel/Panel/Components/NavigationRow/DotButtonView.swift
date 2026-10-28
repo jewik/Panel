@@ -11,33 +11,34 @@ struct DotButton<InnerContent: View>: View {
     
     let color: Color?
     var showUnsavedDot: Bool = false
+    var showInner: Bool = false
     let action: () -> Void
     
     @ViewBuilder
     let innerContent: () -> InnerContent
     
     @State private var isHovered = false
-    
+    private var isActive:Bool { isHovered || showInner }
     
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .center){
                 
                 innerContent()
-                    .opacity(isHovered ? 1.0 : 0.0)
-                    .blur(radius: isHovered ? 0.0 : 8.0)
-                    .scaleEffect(isHovered ? 1.0 : 0.5)
+                    .opacity(isActive ? 1.0 : 0.0)
+                    .blur(radius: isActive ? 0.0 : 8.0)
+                    .scaleEffect(isActive ? 1.0 : 0.5)
                 
                 dotView
-                    .opacity(isHovered ? 0.0 : 1.0)
-                    .blur(radius: isHovered ? 4.0 : 0.0)
-                    .scaleEffect(isHovered ? 0.3 : 1.0)
+                    .opacity(isActive ? 0.0 : 1.0)
+                    .blur(radius: isActive ? 4.0 : 0.0)
+                    .scaleEffect(isActive ? 0.3 : 1.0)
                 
             }
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .animation(.smooth(duration: 0.3), value: isHovered)
+        .animation(.smooth(duration: 0.3), value: isActive)
         .frame(width: 20, height: 20, alignment: .center)
         
     }
@@ -64,6 +65,7 @@ struct DotButton<InnerContent: View>: View {
     HStack (spacing:3){
         DotButton(
             color: .red,
+            showInner: true,
             action: { print("pressed") },
             innerContent: {
                 Image(systemName: "xmark")

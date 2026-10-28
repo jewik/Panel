@@ -16,10 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayPanel: FloatingPanel?
     
     private let panelSize = NSSize(
-        width: 800,
-        height: 300
+        width: 1000,
+        height: 400
     )
-    
     
     func applicationDidFinishLaunching(
         _ notification: Notification
@@ -117,9 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func makeHostingView() -> NSView {
-        let rootView = PanelView()
+        let rootView = RootView()
             .environment(container.controller)
             .environment(container.airDropService)
+            .environment(container.fastFolderStore)
         
         let hostingView = NSHostingView(
             rootView: rootView
