@@ -5,7 +5,6 @@
 //  Created by Usanin Ivan on 27.10.2026.
 //
 
-import AppKit
 import Foundation
 import os
 
@@ -26,21 +25,51 @@ enum FastFolderBookmarkError: LocalizedError {
     }
 }
 
-/// Bookmark and filesystem work that can block on unavailable (e.g. network) volumes.
-/// Actor-isolated so every call runs off the main thread; the store awaits results
-/// and mutates its observable state on the main actor only.
 protocol FastFolderBookmarkServiceProtocol: Sendable {
     func makeBookmark(for url: URL) async throws -> Data
     func resolve(_ bookmark: Data) async throws -> (url: URL, isStale: Bool)
     func snapshot(of url: URL) async throws -> FolderSnapshot
-    func openInNewFinderWindow(_ url: URL) async
 }
 
-actor FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
+/// Runs blocking bookmark and filesystem calls on a concurrent dispatch queue.
+/// A stalled network volume therefore does not serialize checks for other folders.
+struct FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
 
-    private static let userTagsAttribute = "com.apple.metadata:_kMDItemUserTags"
+    private let queue = DispatchQueue(
+        label: "com.panel.fastfolder.bookmark",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
 
-    func makeBookmark(for url: URL) throws -> Data {
+    func makeBookmark(for url: URL) async throws -> Data {
+        try await perform {
+            try Self.makeBookmarkSync(for: url)
+        }
+    }
+
+    func resolve(_ bookmark: Data) async throws -> (url: URL, isStale: Bool) {
+        try await perform {
+            try Self.resolveSync(bookmark)
+        }
+    }
+
+    func snapshot(of url: URL) async throws -> FolderSnapshot {
+        try await perform {
+            try Self.snapshotSync(of: url)
+        }
+    }
+
+    private func perform<T: Sendable>(
+        _ work: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                continuation.resume(with: Result { try work() })
+            }
+        }
+    }
+
+    nonisolated private static func makeBookmarkSync(for url: URL) throws -> Data {
         try url.bookmarkData(
             options: [.withSecurityScope],
             includingResourceValuesForKeys: nil,
@@ -48,7 +77,9 @@ actor FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
         )
     }
 
-    func resolve(_ bookmark: Data) throws -> (url: URL, isStale: Bool) {
+    nonisolated private static func resolveSync(
+        _ bookmark: Data
+    ) throws -> (url: URL, isStale: Bool) {
         var isStale = false
         let url = try URL(
             resolvingBookmarkData: bookmark,
@@ -60,7 +91,7 @@ actor FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
         return (url, isStale)
     }
 
-    func snapshot(of url: URL) throws -> FolderSnapshot {
+    nonisolated private static func snapshotSync(of url: URL) throws -> FolderSnapshot {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
             if didStartAccessing {
@@ -80,41 +111,26 @@ actor FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
 
         let name = values.name ?? url.lastPathComponent
 
-        if let finderTags = Self.finderTags(of: url), !finderTags.isEmpty {
+        guard let finderTags = Self.finderTags(of: url), !finderTags.isEmpty else {
             return FolderSnapshot(
                 name: name,
-                tags: finderTags.map(\.name),
-                tagColorIndex: finderTags.first?.colorIndex ?? 0
+                tags: values.tagNames ?? [],
+                tagColorIndex: 0
             )
         }
 
         return FolderSnapshot(
             name: name,
-            tags: values.tagNames ?? [],
-            tagColorIndex: 0
+            tags: finderTags.map(\.name),
+            tagColorIndex: finderTags.first?.colorIndex ?? 0
         )
-    }
-
-    func openInNewFinderWindow(_ url: URL) async {
-        await MainActor.run {
-            let didStartAccessing = url.startAccessingSecurityScopedResource()
-            defer {
-                if didStartAccessing {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            let selected = NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
-
-            if !selected {
-                NSWorkspace.shared.open(url)
-            }
-        }
     }
 
     // MARK: - Finder tags
 
-    private static func finderTags(
+    nonisolated private static let userTagsAttribute = "com.apple.metadata:_kMDItemUserTags"
+
+    nonisolated private static func finderTags(
         of url: URL
     ) -> [(name: String, colorIndex: Int)]? {
         let path = url.path

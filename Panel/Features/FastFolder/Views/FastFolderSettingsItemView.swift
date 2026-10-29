@@ -10,34 +10,53 @@ import SwiftUI
 struct FastFolderSettingsItemView: View {
 
     let folder: FastFolder
-    let isUnavailable: Bool
+    let availability: FastFolderAvailability
+    let onRetry: () -> Void
     let onRemove: () -> Void
 
     @State private var isHovered = false
 
     private var helpText: String {
-        isUnavailable ? "Folder is unavailable" : folder.name
+        availability == .unavailable ? "Retry" : folder.name
+    }
+
+    private var isUnavailable: Bool {
+        availability == .unavailable
+    }
+
+    private var isRefreshing: Bool {
+        availability == .refreshing
     }
 
     var body: some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
                 icon
-                    .frame(width: 62, height: 54)
+                    .frame(
+                        width: FastFolderMetrics.Settings.iconWidth,
+                        height: FastFolderMetrics.Settings.iconHeight
+                    )
 
                 removeButton
                     .offset(x: 6, y: -2)
+                    .zIndex(1)
             }
-            .frame(width: 70, height: 54)
+            .frame(
+                width: FastFolderMetrics.Settings.iconWidth,
+                height: FastFolderMetrics.Settings.iconHeight
+            )
 
             Text(folder.name)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(isUnavailable ? 0.4 : 1))
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(width: 72)
+                .frame(width: FastFolderMetrics.Settings.captionWidth)
         }
-        .frame(width: 86, height: 84)
+        .frame(
+            width: FastFolderMetrics.Settings.itemWidth,
+            height: FastFolderMetrics.Settings.itemHeight
+        )
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.white.opacity(isHovered ? 0.06 : 0))
@@ -45,22 +64,38 @@ struct FastFolderSettingsItemView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            if isUnavailable {
+                onRetry()
+            }
+        }
         .help(helpText)
+        .accessibilityValue(isRefreshing ? "Refreshing" : "")
     }
 
     @ViewBuilder
     private var icon: some View {
-        Group {
-            if isUnavailable {
-                Image(systemName: "folder.badge.questionmark")
-                    .foregroundStyle(.gray)
-            } else {
-                Image(systemName: "folder.fill")
-                    .foregroundStyle(folder.tagColor.color)
+        ZStack {
+            Group {
+                if isUnavailable {
+                    Image(systemName: "folder.badge.questionmark")
+                        .foregroundStyle(.gray)
+                } else {
+                    Image(systemName: "folder.fill")
+                        .foregroundStyle(folder.tagColor.color)
+                }
+            }
+            .font(.system(size: 54, weight: .regular))
+            .opacity(isUnavailable ? 0.4 : (isRefreshing ? 0.4 : 1))
+
+            if isRefreshing {
+                ProgressView()
+                    .controlSize(.small)
+                    .transition(.opacity)
             }
         }
-        .font(.system(size: 54, weight: .regular))
-        .opacity(isUnavailable ? 0.4 : 1)
+        .animation(.easeOut(duration: 0.15), value: isRefreshing)
     }
 
     private var removeButton: some View {

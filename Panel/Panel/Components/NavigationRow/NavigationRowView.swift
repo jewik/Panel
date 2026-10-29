@@ -99,8 +99,13 @@ struct NavigationRowView: View {
                 }
             )
             
+            Divider()
+                .background(.secondary)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 2)
+            
             DotButton(
-                color: .purple,
+                color: .white,
                 showInner: controller.checkPreset(.settings),
                 action: {
                     controller.showPreset(.settings)
@@ -112,7 +117,7 @@ struct NavigationRowView: View {
                             "gearshape"
                     )
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(.white)
                 }
             )
         }
@@ -130,7 +135,7 @@ struct NavigationRowView: View {
         )
         
     }
-    .frame(width: 160, height: 30)
+    .frame(width: 170, height: 30)
     //    .background(.red.opacity(0.4))
     .frame(width: 200, height: 100)
     .environment(AppContainer().controller)

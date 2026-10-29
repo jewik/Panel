@@ -9,53 +9,23 @@ import Foundation
 import Observation
 import os
 
-struct FastFolderAddOutcome: Equatable {
+struct FastFolderAddOutcome: Equatable, Sendable {
     var added: Int = 0
     var skippedDuplicates: Int = 0
     var rejectedByLimit: Int = 0
     var failed: Int = 0
 }
 
-enum FastFolderRefreshError: LocalizedError {
-    case timedOut
-
-    var errorDescription: String? {
-        switch self {
-        case .timedOut:
-            return "Folder did not respond in time"
-        }
-    }
+enum FastFolderAvailability: Equatable, Sendable {
+    case unknown
+    case refreshing
+    case available
+    case unavailable
 }
 
-private enum FolderRefreshOutcome: Sendable {
-    case refreshed(id: FastFolder.ID, bookmark: Data, snapshot: FolderSnapshot)
-    case failed(id: FastFolder.ID)
-}
-
-/// Runs the blocking bookmark/filesystem work for one folder with a timeout,
-/// so an unavailable (e.g. network) volume cannot stall the whole refresh.
-private func withTimeout<T: Sendable>(
-    _ duration: Duration,
-    operation: @escaping @Sendable () async throws -> T
-) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask {
-            try await operation()
-        }
-
-        group.addTask {
-            try await Task.sleep(for: duration)
-            throw FastFolderRefreshError.timedOut
-        }
-
-        guard let winner = try await group.next() else {
-            throw FastFolderRefreshError.timedOut
-        }
-
-        group.cancelAll()
-
-        return winner
-    }
+enum FastFolderStatus: Equatable, Sendable {
+    case available
+    case unavailable
 }
 
 @MainActor
@@ -64,109 +34,224 @@ final class FastFolderStore {
 
     static let maximumFolderCount = 8
 
-    /// Per-folder work must not outlive this: an unresponsive network volume
-    /// ends the refresh as "unavailable" instead of spinning forever.
-    nonisolated private static let refreshTimeout: Duration = .seconds(15)
+    nonisolated private static let refreshTimeout: Duration = .seconds(10)
 
     private(set) var folders: [FastFolder] = []
-    private(set) var unavailableFolderIDs: Set<FastFolder.ID> = []
-    private(set) var isRefreshing = false
+    private(set) var statuses: [FastFolder.ID: FastFolderStatus] = [:]
+    private(set) var refreshingIDs: Set<FastFolder.ID> = []
 
     @ObservationIgnored private let storage: FastFolderStorage
     @ObservationIgnored private let bookmarkService: FastFolderBookmarkServiceProtocol
+    @ObservationIgnored private let finder: FinderPresenting
+    @ObservationIgnored private let picker: FolderPicking
+
+    @ObservationIgnored private var attempts: [FastFolder.ID: UUID] = [:]
+    @ObservationIgnored private var tasks: [FastFolder.ID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var watchdogs: [FastFolder.ID: Task<Void, Never>] = [:]
+
+    private enum LoadResult: Sendable {
+        case refreshed(bookmark: Data, snapshot: FolderSnapshot, elapsed: Duration)
+        case failed(elapsed: Duration)
+        case timedOut
+    }
 
     var canAddFolder: Bool {
         folders.count < Self.maximumFolderCount
     }
 
-    var availableFolders: [FastFolder] {
-        folders.filter { !unavailableFolderIDs.contains($0.id) }
+    var isRefreshing: Bool {
+        !refreshingIDs.isEmpty
     }
 
-    var unavailableCount: Int {
-        unavailableFolderIDs.count
+    var availableFolders: [FastFolder] {
+        folders.filter { statuses[$0.id] != .unavailable }
+    }
+
+    var unavailableFolders: [FastFolder] {
+        folders.filter { statuses[$0.id] == .unavailable }
     }
 
     init(
         storage: FastFolderStorage,
-        bookmarkService: FastFolderBookmarkServiceProtocol
+        bookmarkService: FastFolderBookmarkServiceProtocol,
+        finder: FinderPresenting,
+        picker: FolderPicking
     ) {
         self.storage = storage
         self.bookmarkService = bookmarkService
+        self.finder = finder
+        self.picker = picker
         self.folders = storage.load()
     }
 
-    func refresh() async {
-        guard !isRefreshing, !folders.isEmpty else { return }
+    func availability(of id: FastFolder.ID) -> FastFolderAvailability {
+        if refreshingIDs.contains(id) {
+            return .refreshing
+        }
 
-        isRefreshing = true
-        defer { isRefreshing = false }
+        switch statuses[id] {
+        case .available?:
+            return .available
+        case .unavailable?:
+            return .unavailable
+        case nil:
+            return .unknown
+        }
+    }
 
-        var unavailableIDs = Set<FastFolder.ID>()
-        var didChange = false
+    // MARK: - Refresh
+
+    /// Starts checks for every folder not already being checked and returns immediately.
+    func refresh() {
+        for folder in folders {
+            refresh(folderID: folder.id)
+        }
+    }
+
+    func refresh(folderID: FastFolder.ID) {
+        guard let folder = folders.first(where: { $0.id == folderID }) else {
+            return
+        }
+        guard attempts[folderID] == nil else {
+            return
+        }
+
+        let token = UUID()
+        attempts[folderID] = token
+        refreshingIDs.insert(folderID)
 
         let service = bookmarkService
 
-        // Each folder is refreshed by its own child task on the service actor,
-        // so one hanging volume cannot delay results of the others.
-        await withTaskGroup(of: FolderRefreshOutcome.self) { group in
-            for folder in folders {
-                group.addTask {
-                    await Self.refreshFolder(folder, using: service)
-                }
-            }
-
-            for await outcome in group {
-                switch outcome {
-                case .refreshed(let id, let bookmark, let snapshot):
-                    guard let index = folders.firstIndex(where: { $0.id == id }) else {
-                        continue
-                    }
-
-                    let previous = folders[index]
-                    folders[index].bookmark = bookmark
-                    folders[index].name = snapshot.name
-                    folders[index].tags = snapshot.tags
-                    folders[index].tagColorIndex = snapshot.tagColorIndex
-                    unavailableIDs.remove(id)
-
-                    if folders[index] != previous {
-                        didChange = true
-                    }
-
-                case .failed(let id):
-                    unavailableIDs.insert(id)
-                }
-            }
+        tasks[folderID] = Task { [weak self] in
+            let result = await Self.load(folder, using: service)
+            self?.finish(folderID: folderID, token: token, result: result)
         }
 
-        unavailableFolderIDs = unavailableIDs
+        watchdogs[folderID] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.refreshTimeout)
+            } catch {
+                return
+            }
 
-        if didChange {
-            storage.save(folders)
+            self?.finish(folderID: folderID, token: token, result: .timedOut)
         }
-
-        Log.service.info(
-            "FastFolder refresh finished: \(self.folders.count - unavailableIDs.count) available, \(unavailableIDs.count) unavailable, saved: \(didChange)"
-        )
     }
+
+    private func finish(
+        folderID: FastFolder.ID,
+        token: UUID,
+        result: LoadResult
+    ) {
+        guard attempts[folderID] == token else {
+            Log.service.debug(
+                "FastFolder refresh discarded late result id=\(folderID.uuidString, privacy: .public)"
+            )
+            return
+        }
+
+        attempts[folderID] = nil
+        tasks[folderID] = nil
+        watchdogs[folderID]?.cancel()
+        watchdogs[folderID] = nil
+        refreshingIDs.remove(folderID)
+
+        guard let index = folders.firstIndex(where: { $0.id == folderID }) else {
+            statuses[folderID] = nil
+            Log.service.debug(
+                "FastFolder refresh discarded result for removed folder id=\(folderID.uuidString, privacy: .public)"
+            )
+            return
+        }
+
+        let name = folders[index].name
+
+        switch result {
+        case .refreshed(let bookmark, let snapshot, let elapsed):
+            let previous = folders[index]
+            folders[index].bookmark = bookmark
+            folders[index].name = snapshot.name
+            folders[index].tags = snapshot.tags
+            folders[index].tagColorIndex = snapshot.tagColorIndex
+            statuses[folderID] = .available
+
+            if folders[index] != previous {
+                storage.save(folders)
+            }
+
+            Log.service.info(
+                "FastFolder refresh refreshed id=\(folderID.uuidString, privacy: .public) name=\(snapshot.name, privacy: .public) in \(Self.seconds(elapsed), format: .fixed(precision: 2))s"
+            )
+
+        case .failed(let elapsed):
+            statuses[folderID] = .unavailable
+            Log.service.info(
+                "FastFolder refresh unavailable id=\(folderID.uuidString, privacy: .public) name=\(name, privacy: .public) in \(Self.seconds(elapsed), format: .fixed(precision: 2))s"
+            )
+
+        case .timedOut:
+            statuses[folderID] = .unavailable
+            Log.service.info(
+                "FastFolder refresh timed out id=\(folderID.uuidString, privacy: .public) name=\(name, privacy: .public) after \(Self.seconds(Self.refreshTimeout), format: .fixed(precision: 2))s"
+            )
+        }
+    }
+
+    nonisolated private static func load(
+        _ folder: FastFolder,
+        using service: FastFolderBookmarkServiceProtocol
+    ) async -> LoadResult {
+        let startedAt = ContinuousClock.now
+
+        do {
+            let resolved = try await service.resolve(folder.bookmark)
+            let bookmark = resolved.isStale
+                ? try await service.makeBookmark(for: resolved.url)
+                : folder.bookmark
+            let snapshot = try await service.snapshot(of: resolved.url)
+
+            return .refreshed(
+                bookmark: bookmark,
+                snapshot: snapshot,
+                elapsed: startedAt.duration(to: .now)
+            )
+        } catch {
+            Log.service.error(
+                "FastFolder refresh failed for \(folder.name, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            return .failed(elapsed: startedAt.duration(to: .now))
+        }
+    }
+
+    nonisolated private static func seconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
+
+    // MARK: - Folder actions
 
     @discardableResult
     func addFolders(_ urls: [URL]) async -> FastFolderAddOutcome {
         var outcome = FastFolderAddOutcome()
         var knownPaths = Set<String>()
+        var unresolvedNames = Set<String>()
 
         for folder in folders {
             if let resolved = try? await bookmarkService.resolve(folder.bookmark) {
                 knownPaths.insert(resolved.url.standardizedFileURL.path)
+            } else {
+                unresolvedNames.insert(folder.name)
             }
         }
 
         for url in urls {
             let path = url.standardizedFileURL.path
 
-            if knownPaths.contains(path) {
+            if knownPaths.contains(path) || unresolvedNames.contains(url.lastPathComponent) {
                 outcome.skippedDuplicates += 1
+                Log.service.debug(
+                    "FastFolder duplicate skipped for \(path, privacy: .public)"
+                )
                 continue
             }
 
@@ -178,15 +263,15 @@ final class FastFolderStore {
             do {
                 let bookmark = try await bookmarkService.makeBookmark(for: url)
                 let snapshot = try await bookmarkService.snapshot(of: url)
-
-                folders.append(
-                    FastFolder(
-                        name: snapshot.name,
-                        bookmark: bookmark,
-                        tags: snapshot.tags,
-                        tagColorIndex: snapshot.tagColorIndex
-                    )
+                let folder = FastFolder(
+                    name: snapshot.name,
+                    bookmark: bookmark,
+                    tags: snapshot.tags,
+                    tagColorIndex: snapshot.tagColorIndex
                 )
+
+                folders.append(folder)
+                statuses[folder.id] = .available
                 knownPaths.insert(path)
                 outcome.added += 1
             } catch {
@@ -199,10 +284,23 @@ final class FastFolderStore {
 
         if outcome.added > 0 {
             storage.save(folders)
-            Log.ui.info("FastFolder added \(outcome.added) folder(s)")
         }
 
+        Log.ui.info(
+            "FastFolder add finished: added \(outcome.added), duplicates \(outcome.skippedDuplicates), over limit \(outcome.rejectedByLimit), failed \(outcome.failed)"
+        )
+
         return outcome
+    }
+
+    @discardableResult
+    func addFoldersViaPicker() async -> FastFolderAddOutcome? {
+        let urls = await picker.pickFolders()
+        guard !urls.isEmpty else {
+            return nil
+        }
+
+        return await addFolders(urls)
     }
 
     func removeFolder(id: FastFolder.ID) {
@@ -211,17 +309,24 @@ final class FastFolderStore {
         }
 
         let removed = folders.remove(at: index)
-        unavailableFolderIDs.remove(id)
+        cancelRefresh(folderID: id)
+        statuses[id] = nil
         storage.save(folders)
 
         Log.ui.info("FastFolder removed \(removed.name, privacy: .public)")
     }
 
     func removeAll() {
-        guard !folders.isEmpty else { return }
+        guard !folders.isEmpty else {
+            return
+        }
+
+        for id in folders.map(\.id) {
+            cancelRefresh(folderID: id)
+        }
 
         folders.removeAll()
-        unavailableFolderIDs.removeAll()
+        statuses.removeAll()
         storage.save(folders)
 
         Log.ui.info("FastFolder removed all folders")
@@ -240,45 +345,29 @@ final class FastFolderStore {
                 }
             }
 
-            await bookmarkService.openInNewFinderWindow(resolved.url)
+            guard folders.contains(where: { $0.id == folder.id }) else {
+                return
+            }
+
+            statuses[folder.id] = .available
+            finder.openInNewFinderWindow(resolved.url)
             Log.ui.info("FastFolder opened \(folder.name, privacy: .public)")
         } catch {
-            unavailableFolderIDs.insert(folder.id)
+            if folders.contains(where: { $0.id == folder.id }) {
+                statuses[folder.id] = .unavailable
+            }
             Log.service.error(
                 "FastFolder open failed for \(folder.name, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
         }
     }
 
-    // MARK: - Per-folder refresh
-
-    private nonisolated static func refreshFolder(
-        _ folder: FastFolder,
-        using service: FastFolderBookmarkServiceProtocol
-    ) async -> FolderRefreshOutcome {
-        do {
-            let result = try await withTimeout(refreshTimeout) {
-                let resolved = try await service.resolve(folder.bookmark)
-
-                var bookmark = folder.bookmark
-                if resolved.isStale {
-                    bookmark = try await service.makeBookmark(for: resolved.url)
-                }
-
-                let snapshot = try await service.snapshot(of: resolved.url)
-                return (bookmark: bookmark, snapshot: snapshot)
-            }
-
-            return .refreshed(
-                id: folder.id,
-                bookmark: result.bookmark,
-                snapshot: result.snapshot
-            )
-        } catch {
-            Log.service.error(
-                "FastFolder refresh failed for \(folder.name, privacy: .public): \(error.localizedDescription, privacy: .public)"
-            )
-            return .failed(id: folder.id)
-        }
+    private func cancelRefresh(folderID: FastFolder.ID) {
+        attempts[folderID] = nil
+        tasks[folderID]?.cancel()
+        tasks[folderID] = nil
+        watchdogs[folderID]?.cancel()
+        watchdogs[folderID] = nil
+        refreshingIDs.remove(folderID)
     }
 }

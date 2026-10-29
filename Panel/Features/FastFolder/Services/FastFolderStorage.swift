@@ -13,7 +13,6 @@ protocol FastFolderStorage {
     func save(_ folders: [FastFolder])
 }
 
-@MainActor
 final class UserDefaultsFastFolderStorage: FastFolderStorage {
 
     private static let storageKey = "fastFolders"
