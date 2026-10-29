@@ -9,7 +9,7 @@ import AppKit
 import Foundation
 import os
 
-struct FolderSnapshot: Equatable {
+struct FolderSnapshot: Equatable, Sendable {
     let name: String
     let tags: [String]
     let tagColorIndex: Int
@@ -26,16 +26,17 @@ enum FastFolderBookmarkError: LocalizedError {
     }
 }
 
-@MainActor
-protocol FastFolderBookmarkServiceProtocol {
-    func makeBookmark(for url: URL) throws -> Data
-    func resolve(_ bookmark: Data) throws -> (url: URL, isStale: Bool)
-    func snapshot(of url: URL) throws -> FolderSnapshot
-    func openInNewFinderWindow(_ url: URL)
+/// Bookmark and filesystem work that can block on unavailable (e.g. network) volumes.
+/// Actor-isolated so every call runs off the main thread; the store awaits results
+/// and mutates its observable state on the main actor only.
+protocol FastFolderBookmarkServiceProtocol: Sendable {
+    func makeBookmark(for url: URL) async throws -> Data
+    func resolve(_ bookmark: Data) async throws -> (url: URL, isStale: Bool)
+    func snapshot(of url: URL) async throws -> FolderSnapshot
+    func openInNewFinderWindow(_ url: URL) async
 }
 
-@MainActor
-final class FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
+actor FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
 
     private static let userTagsAttribute = "com.apple.metadata:_kMDItemUserTags"
 
@@ -94,19 +95,21 @@ final class FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
         )
     }
 
-    func openInNewFinderWindow(_ url: URL) {
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
-        defer {
-            if didStartAccessing {
-                url.stopAccessingSecurityScopedResource()
+    func openInNewFinderWindow(_ url: URL) async {
+        await MainActor.run {
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let selected = NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+
+            if !selected {
+                NSWorkspace.shared.open(url)
             }
         }
-
-        if NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path) {
-            return
-        }
-
-        NSWorkspace.shared.open(url)
     }
 
     // MARK: - Finder tags

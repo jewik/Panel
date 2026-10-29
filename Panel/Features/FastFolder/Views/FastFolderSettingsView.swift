@@ -23,7 +23,9 @@ struct FastFolderSettingsView: View {
         .padding(10)
         .frame(width: 600, height: 150)
         .onAppear {
-            store.refresh()
+            Task {
+                await store.refresh()
+            }
         }
         .confirmationDialog(
             "Clear all folders?",
@@ -52,12 +54,20 @@ struct FastFolderSettingsView: View {
 
             Spacer(minLength: 8)
 
-            FastFolderToolbarButton(
-                systemName: "arrow.clockwise",
-                helpText: "Refresh folders",
-                isDisabled: store.folders.isEmpty
-            ) {
-                store.refresh()
+            if store.isRefreshing {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 24, height: 24)
+            } else {
+                FastFolderToolbarButton(
+                    systemName: "arrow.clockwise",
+                    helpText: "Refresh folders",
+                    isDisabled: store.folders.isEmpty
+                ) {
+                    Task {
+                        await store.refresh()
+                    }
+                }
             }
 
             FastFolderToolbarButton(
@@ -121,11 +131,15 @@ struct FastFolderSettingsView: View {
             return
         }
 
-        let outcome = store.addFolders(panel.urls)
+        let urls = panel.urls
 
-        Log.ui.info(
-            "FastFolder add finished: added \(outcome.added), duplicates \(outcome.skippedDuplicates), over limit \(outcome.rejectedByLimit), failed \(outcome.failed)"
-        )
+        Task {
+            let outcome = await store.addFolders(urls)
+
+            Log.ui.info(
+                "FastFolder add finished: added \(outcome.added), duplicates \(outcome.skippedDuplicates), over limit \(outcome.rejectedByLimit), failed \(outcome.failed)"
+            )
+        }
     }
 }
 

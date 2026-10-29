@@ -29,16 +29,19 @@ final class InMemoryFastFolderStorage: FastFolderStorage {
 
 // MARK: - Preview bookmark service
 
-@MainActor
-final class PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
+actor PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
 
-    struct Entry {
+    struct Entry: Sendable {
         let url: URL
         let snapshot: FolderSnapshot
         let isAvailable: Bool
     }
 
-    private var entriesByBookmark: [Data: Entry] = [:]
+    private var entriesByBookmark: [Data: Entry]
+
+    init(entriesByBookmark: [Data: Entry] = [:]) {
+        self.entriesByBookmark = entriesByBookmark
+    }
 
     func register(bookmark: Data, entry: Entry) {
         entriesByBookmark[bookmark] = entry
@@ -98,7 +101,7 @@ struct PreviewFastFolder {
 
 @MainActor
 func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderStore {
-    let bookmarkService = PreviewBookmarkService()
+    var entries: [Data: PreviewBookmarkService.Entry] = [:]
     var folders: [FastFolder] = []
 
     for (index, preview) in previews.enumerated() {
@@ -113,13 +116,10 @@ func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderSt
             tagColorIndex: preview.color.rawValue
         )
 
-        bookmarkService.register(
-            bookmark: bookmark,
-            entry: .init(
-                url: url,
-                snapshot: snapshot,
-                isAvailable: preview.isAvailable
-            )
+        entries[bookmark] = .init(
+            url: url,
+            snapshot: snapshot,
+            isAvailable: preview.isAvailable
         )
 
         folders.append(
@@ -134,6 +134,6 @@ func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderSt
 
     return FastFolderStore(
         storage: InMemoryFastFolderStorage(folders: folders),
-        bookmarkService: bookmarkService
+        bookmarkService: PreviewBookmarkService(entriesByBookmark: entries)
     )
 }

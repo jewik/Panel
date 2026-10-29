@@ -33,13 +33,36 @@ struct FastFolderView: View {
     var body: some View {
         content
             .frame(width: shelfWidth, height: shelfHeight)
-//            .background(
-//                RoundedRectangle(cornerRadius: 30, style: .continuous)
-//                    .fill(.cyan.opacity(0.1))
-//            )
-            .task {
-                store.refresh()
+            .disabled(store.isRefreshing)
+            .overlay {
+                if store.isRefreshing {
+                    refreshIndicator
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeOut(duration: 0.15), value: store.isRefreshing)
+            .onAppear {
+                Task {
+                    await store.refresh()
+                }
+            }
+    }
+
+    private var refreshIndicator: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .controlSize(.small)
+
+            Text("Refreshing…")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.black.opacity(0.6))
+        )
     }
 
     @ViewBuilder
@@ -66,7 +89,9 @@ struct FastFolderView: View {
             HStack(spacing: itemSpacing) {
                 ForEach(store.availableFolders) { folder in
                     FastFolderItemView(folder: folder) {
-                        store.open(folder)
+                        Task {
+                            await store.open(folder)
+                        }
                     }
                 }
             }
