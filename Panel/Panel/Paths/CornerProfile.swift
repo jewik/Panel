@@ -43,7 +43,7 @@ enum ContinuousCornerPath {
                 offsetX = -radius
         }
 
-        for point in SuperellipseLookup.g2_n3_samples {
+        for point in SuperellipseLookup.g2_n2p5_samples {
             let x = point[0] * radiusF
             let y = point[1] * radiusF
 

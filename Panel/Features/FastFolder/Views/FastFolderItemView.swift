@@ -7,25 +7,11 @@
 
 import SwiftUI
 
-extension FinderTagColor {
-    var color: Color {
-        switch self {
-        case .none: .cyan
-        case .gray: .gray
-        case .green: .green
-        case .purple: .purple
-        case .blue: .blue
-        case .yellow: .yellow
-        case .red: .red
-        case .orange: .orange
-        }
-    }
-}
-
 struct FastFolderItemView: View {
 
     let folder: FastFolder
-    let action: () -> Void
+    let isRefreshing: Bool
+    let onOpen: () -> Void
 
     @State private var isHovered = false
 
@@ -34,23 +20,37 @@ struct FastFolderItemView: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button(action: onOpen) {
             VStack(spacing: 4) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 50, weight: .regular))
-                    .foregroundStyle(tagColor)
-                    .shadow(color: tagColor.opacity(isHovered ? 0.7 : 0), radius: 6)
+                ZStack {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 50, weight: .regular))
+                        .foregroundStyle(tagColor)
+                        .opacity(isRefreshing ? 0.35 : 1)
+                        .shadow(color: tagColor.opacity(isHovered ? 0.7 : 0), radius: 6)
+
+                    if isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .transition(.opacity)
+                            .offset(y: 4)
+                    }
+                }
+                .animation(.easeOut(duration: 0.15), value: isRefreshing)
 
                 Text(folder.name)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .frame(width: 76)
+                    .frame(width: FastFolderMetrics.itemWidth)
             }
-            .frame(width: 76, height: 96)
+            .frame(
+                width: FastFolderMetrics.itemWidth,
+                height: FastFolderMetrics.itemHeight
+            )
             .offset(y: isHovered ? -3 : 0)
-//            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -60,6 +60,7 @@ struct FastFolderItemView: View {
         }
         .help(folder.name)
         .accessibilityLabel(folder.name)
+        .accessibilityValue(isRefreshing ? "Refreshing" : "")
         .accessibilityHint("Opens the folder in a new Finder window")
     }
 }

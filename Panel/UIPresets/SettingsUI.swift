@@ -13,6 +13,7 @@ struct SettingsUI: View {
     }
 }
 
+#if DEBUG
 #Preview {
     ZStack(alignment: .top) {
         PanelShape()
@@ -30,3 +31,4 @@ struct SettingsUI: View {
     )
     .environment(PanelController(panelState: PanelState()))
 }
+#endif

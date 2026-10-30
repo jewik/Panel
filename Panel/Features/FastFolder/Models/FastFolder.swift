@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct FastFolder: Identifiable, Codable, Equatable {
+struct FastFolder: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var name: String
     var bookmark: Data
@@ -51,7 +51,7 @@ struct FastFolder: Identifiable, Codable, Equatable {
     }
 }
 
-enum FinderTagColor: Int {
+enum FinderTagColor: Int, Sendable {
     case none = 0
     case gray = 1
     case green = 2

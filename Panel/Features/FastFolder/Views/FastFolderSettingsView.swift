@@ -5,9 +5,7 @@
 //  Created by Usanin Ivan on 27.10.2026.
 //
 
-import AppKit
 import SwiftUI
-import os
 
 struct FastFolderSettingsView: View {
 
@@ -22,7 +20,7 @@ struct FastFolderSettingsView: View {
         }
         .padding(10)
         .frame(width: 600, height: 150)
-        .onAppear {
+        .task {
             store.refresh()
         }
         .confirmationDialog(
@@ -52,12 +50,18 @@ struct FastFolderSettingsView: View {
 
             Spacer(minLength: 8)
 
-            FastFolderToolbarButton(
-                systemName: "arrow.clockwise",
-                helpText: "Refresh folders",
-                isDisabled: store.folders.isEmpty
-            ) {
-                store.refresh()
+            if store.isRefreshing {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 24, height: 24)
+            } else {
+                FastFolderToolbarButton(
+                    systemName: "arrow.clockwise",
+                    helpText: "Refresh folders",
+                    isDisabled: store.folders.isEmpty
+                ) {
+                    store.refresh()
+                }
             }
 
             FastFolderToolbarButton(
@@ -65,7 +69,6 @@ struct FastFolderSettingsView: View {
                 helpText: "Clear all folders",
                 isDisabled: store.folders.isEmpty
             ) {
-                NSApp.activate(ignoringOtherApps: true)
                 isClearConfirmationPresented = true
             }
 
@@ -74,7 +77,9 @@ struct FastFolderSettingsView: View {
                 helpText: "Add folders",
                 isDisabled: !store.canAddFolder
             ) {
-                presentAddPanel()
+                Task {
+                    await store.addFoldersViaPicker()
+                }
             }
         }
         .frame(height: 24)
@@ -89,11 +94,14 @@ struct FastFolderSettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: FastFolderMetrics.itemSpacing) {
                     ForEach(store.folders) { folder in
                         FastFolderSettingsItemView(
                             folder: folder,
-                            isUnavailable: store.unavailableFolderIDs.contains(folder.id),
+                            availability: store.availability(of: folder.id),
+                            onRetry: {
+                                store.refresh(folderID: folder.id)
+                            },
                             onRemove: {
                                 store.removeFolder(id: folder.id)
                             }
@@ -106,27 +114,6 @@ struct FastFolderSettingsView: View {
         }
     }
 
-    private func presentAddPanel() {
-        NSApp.activate(ignoringOtherApps: true)
-
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        panel.canCreateDirectories = false
-        panel.prompt = "Add"
-        panel.message = "Choose folders to add to FastFolders"
-
-        guard panel.runModal() == .OK else {
-            return
-        }
-
-        let outcome = store.addFolders(panel.urls)
-
-        Log.ui.info(
-            "FastFolder add finished: added \(outcome.added), duplicates \(outcome.skippedDuplicates), over limit \(outcome.rejectedByLimit), failed \(outcome.failed)"
-        )
-    }
 }
 
 private struct FastFolderToolbarButton: View {

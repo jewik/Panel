@@ -12,31 +12,22 @@ struct FastFolderView: View {
     @Environment(FastFolderStore.self) private var store
     @Environment(PanelController.self) private var controller
 
-    private let itemWidth: CGFloat = 76
-    private let itemSpacing: CGFloat = 8
-    private let horizontalPadding: CGFloat = 10
-    private let shelfHeight: CGFloat = 100
-    private let placeholderWidth: CGFloat = 400
-    private let maximumShelfWidth: CGFloat = 900
-
     private var shelfWidth: CGFloat {
         let count = CGFloat(store.availableFolders.count)
 
         guard count > 0 else {
-            return placeholderWidth
+            return FastFolderMetrics.placeholderWidth
         }
 
-        let contentWidth = count * itemWidth + (count - 1) * itemSpacing + horizontalPadding * 2
-        return min(contentWidth, maximumShelfWidth)
+        let contentWidth = count * FastFolderMetrics.itemWidth
+            + (count - 1) * FastFolderMetrics.itemSpacing
+            + FastFolderMetrics.horizontalPadding * 2
+        return min(contentWidth, FastFolderMetrics.maximumShelfWidth)
     }
 
     var body: some View {
         content
-            .frame(width: shelfWidth, height: shelfHeight)
-//            .background(
-//                RoundedRectangle(cornerRadius: 30, style: .continuous)
-//                    .fill(.cyan.opacity(0.1))
-//            )
+            .frame(width: shelfWidth, height: FastFolderMetrics.shelfHeight)
             .task {
                 store.refresh()
             }
@@ -50,7 +41,7 @@ struct FastFolderView: View {
                 title: "Add folders in Settings",
                 help: "Opens FastFolder settings"
             )
-        } else if store.availableFolders.isEmpty {
+        } else if store.availableFolders.isEmpty && !store.isRefreshing {
             placeholder(
                 systemName: "folder.badge.questionmark",
                 title: "Folders unavailable",
@@ -63,15 +54,21 @@ struct FastFolderView: View {
 
     private var shelf: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: itemSpacing) {
+            HStack(spacing: FastFolderMetrics.itemSpacing) {
                 ForEach(store.availableFolders) { folder in
-                    FastFolderItemView(folder: folder) {
-                        store.open(folder)
+                    FastFolderItemView(
+                        folder: folder,
+                        isRefreshing: store.refreshingIDs.contains(folder.id)
+                    ) {
+                        Task {
+                            await store.open(folder)
+                        }
                     }
                 }
             }
-            .padding(.horizontal, horizontalPadding)
-            .frame(height: shelfHeight - horizontalPadding * 2)
+            .padding(.horizontal, FastFolderMetrics.horizontalPadding)
+            .padding(.vertical, FastFolderMetrics.verticalPadding)
+            .frame(height: FastFolderMetrics.shelfHeight)
         }
     }
 

@@ -13,6 +13,7 @@ struct FastFolderUI: View {
     }
 }
 
+#if DEBUG
 #Preview("FastFolder — folders") {
     ZStack(alignment: .top) {
         PanelShape()
@@ -59,3 +60,4 @@ struct FastFolderUI: View {
     )
     .environment(PanelController(panelState: PanelState()))
 }
+#endif

@@ -5,11 +5,11 @@
 //  Created by Usanin Ivan on 27.10.2026.
 //
 
+#if DEBUG
 import Foundation
 
 // MARK: - Preview storage
 
-@MainActor
 final class InMemoryFastFolderStorage: FastFolderStorage {
 
     private var folders: [FastFolder]
@@ -27,44 +27,46 @@ final class InMemoryFastFolderStorage: FastFolderStorage {
     }
 }
 
-// MARK: - Preview bookmark service
+// MARK: - Preview services
 
-@MainActor
-final class PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
+nonisolated struct PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
 
-    struct Entry {
+    struct Entry: Sendable {
         let url: URL
         let snapshot: FolderSnapshot
         let isAvailable: Bool
+        let delay: Duration
     }
 
-    private var entriesByBookmark: [Data: Entry] = [:]
+    let entriesByBookmark: [Data: Entry]
 
-    func register(bookmark: Data, entry: Entry) {
-        entriesByBookmark[bookmark] = entry
-    }
-
-    func makeBookmark(for url: URL) throws -> Data {
+    func makeBookmark(for url: URL) async throws -> Data {
         Data(url.absoluteString.utf8)
     }
 
-    func resolve(_ bookmark: Data) throws -> (url: URL, isStale: Bool) {
-        guard let entry = entriesByBookmark[bookmark], entry.isAvailable else {
+    func resolve(_ bookmark: Data) async throws -> (url: URL, isStale: Bool) {
+        guard let entry = entriesByBookmark[bookmark] else {
+            throw PreviewBookmarkError.unavailable
+        }
+
+        if entry.delay > .zero {
+            try await Task.sleep(for: entry.delay)
+        }
+
+        guard entry.isAvailable else {
             throw PreviewBookmarkError.unavailable
         }
 
         return (entry.url, false)
     }
 
-    func snapshot(of url: URL) throws -> FolderSnapshot {
+    func snapshot(of url: URL) async throws -> FolderSnapshot {
         guard let entry = entriesByBookmark.values.first(where: { $0.url == url }) else {
             throw PreviewBookmarkError.unavailable
         }
 
         return entry.snapshot
     }
-
-    func openInNewFinderWindow(_ url: URL) {}
 
     private enum PreviewBookmarkError: LocalizedError {
         case unavailable
@@ -75,6 +77,16 @@ final class PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
     }
 }
 
+@MainActor
+final class PreviewFinderPresenter: FinderPresenting {
+    func openInNewFinderWindow(_ url: URL) {}
+}
+
+@MainActor
+final class PreviewFolderPicker: FolderPicking {
+    func pickFolders() async -> [URL] { [] }
+}
+
 // MARK: - Preview data
 
 struct PreviewFastFolder {
@@ -82,23 +94,26 @@ struct PreviewFastFolder {
     let color: FinderTagColor
     let tags: [String]
     let isAvailable: Bool
+    let delay: Duration
 
     init(
         name: String,
         color: FinderTagColor = .none,
         tags: [String] = [],
-        isAvailable: Bool = true
+        isAvailable: Bool = true,
+        delay: Duration = .zero
     ) {
         self.name = name
         self.color = color
         self.tags = tags
         self.isAvailable = isAvailable
+        self.delay = delay
     }
 }
 
 @MainActor
 func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderStore {
-    let bookmarkService = PreviewBookmarkService()
+    var entries: [Data: PreviewBookmarkService.Entry] = [:]
     var folders: [FastFolder] = []
 
     for (index, preview) in previews.enumerated() {
@@ -113,13 +128,11 @@ func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderSt
             tagColorIndex: preview.color.rawValue
         )
 
-        bookmarkService.register(
-            bookmark: bookmark,
-            entry: .init(
-                url: url,
-                snapshot: snapshot,
-                isAvailable: preview.isAvailable
-            )
+        entries[bookmark] = .init(
+            url: url,
+            snapshot: snapshot,
+            isAvailable: preview.isAvailable,
+            delay: preview.delay
         )
 
         folders.append(
@@ -134,6 +147,9 @@ func makePreviewFastFolderStore(_ previews: [PreviewFastFolder]) -> FastFolderSt
 
     return FastFolderStore(
         storage: InMemoryFastFolderStorage(folders: folders),
-        bookmarkService: bookmarkService
+        bookmarkService: PreviewBookmarkService(entriesByBookmark: entries),
+        finder: PreviewFinderPresenter(),
+        picker: PreviewFolderPicker()
     )
 }
+#endif

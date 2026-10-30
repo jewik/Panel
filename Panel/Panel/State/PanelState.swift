@@ -11,13 +11,6 @@ enum PanelPreset {
     case settings
 }
 
-//enum PanelMode {
-//    case collapsed
-//    case expanded
-//}
-
-
-
 @Observable
 final class PanelState {
     
@@ -25,7 +18,6 @@ final class PanelState {
     var isPanelPinned: Bool = false
     var isAutoPinSuppressed: Bool = false
     
-//    var panelMode: PanelMode = .collapsed
     var preset: PanelPreset = .collapsed
 
 }

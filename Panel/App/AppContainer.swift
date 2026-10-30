@@ -28,10 +28,15 @@ final class AppContainer {
         self.controller = PanelController(
             panelState: panelState
         )
+
+        let finder = FinderPresenter()
+        let picker = FolderPicker()
         
         self.fastFolderStore = FastFolderStore(
             storage: UserDefaultsFastFolderStorage(),
-            bookmarkService: FastFolderBookmarkService()
+            bookmarkService: FastFolderBookmarkService(),
+            finder: finder,
+            picker: picker
         )
         
         Log.general.info("AppContainer init finished")

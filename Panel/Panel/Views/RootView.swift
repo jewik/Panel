@@ -137,7 +137,7 @@ struct RootView: View {
             )
             
         }
-        .frame(width: 160, height: 30)
+        .frame(width: 170, height: 30)
     }
     
     private var bar: some View {

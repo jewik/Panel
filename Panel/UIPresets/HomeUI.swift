@@ -18,6 +18,7 @@ struct HomeUI: View {
 
 
 
+#if DEBUG
 #Preview {
     ZStack {
         PanelShape()
@@ -26,4 +27,12 @@ struct HomeUI: View {
         HomeUI()
     }
     .frame(width: 600, height: 150, alignment: .top)
+    .environment(
+        makePreviewFastFolderStore([
+            PreviewFastFolder(name: "Projects", color: .blue),
+            PreviewFastFolder(name: "Downloads", color: .none),
+        ])
+    )
+    .environment(PanelController(panelState: PanelState()))
 }
+#endif
