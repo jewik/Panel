@@ -34,7 +34,7 @@ final class FastFolderStore {
 
     static let maximumFolderCount = 8
 
-    nonisolated private static let refreshTimeout: Duration = .seconds(10)
+    nonisolated private static let defaultRefreshTimeout: Duration = .seconds(10)
 
     private(set) var folders: [FastFolder] = []
     private(set) var statuses: [FastFolder.ID: FastFolderStatus] = [:]
@@ -44,6 +44,7 @@ final class FastFolderStore {
     @ObservationIgnored private let bookmarkService: FastFolderBookmarkServiceProtocol
     @ObservationIgnored private let finder: FinderPresenting
     @ObservationIgnored private let picker: FolderPicking
+    @ObservationIgnored private let refreshTimeout: Duration
 
     @ObservationIgnored private var attempts: [FastFolder.ID: UUID] = [:]
     @ObservationIgnored private var tasks: [FastFolder.ID: Task<Void, Never>] = [:]
@@ -75,12 +76,14 @@ final class FastFolderStore {
         storage: FastFolderStorage,
         bookmarkService: FastFolderBookmarkServiceProtocol,
         finder: FinderPresenting,
-        picker: FolderPicking
+        picker: FolderPicking,
+        refreshTimeout: Duration = FastFolderStore.defaultRefreshTimeout
     ) {
         self.storage = storage
         self.bookmarkService = bookmarkService
         self.finder = finder
         self.picker = picker
+        self.refreshTimeout = refreshTimeout
         self.folders = storage.load()
     }
 
@@ -121,6 +124,7 @@ final class FastFolderStore {
         refreshingIDs.insert(folderID)
 
         let service = bookmarkService
+        let timeout = refreshTimeout
 
         tasks[folderID] = Task { [weak self] in
             let result = await Self.load(folder, using: service)
@@ -129,7 +133,7 @@ final class FastFolderStore {
 
         watchdogs[folderID] = Task { [weak self] in
             do {
-                try await Task.sleep(for: Self.refreshTimeout)
+                try await Task.sleep(for: timeout)
             } catch {
                 return
             }
@@ -192,7 +196,7 @@ final class FastFolderStore {
         case .timedOut:
             statuses[folderID] = .unavailable
             Log.service.info(
-                "FastFolder refresh timed out id=\(folderID.uuidString, privacy: .public) name=\(name, privacy: .public) after \(Self.seconds(Self.refreshTimeout), format: .fixed(precision: 2))s"
+                "FastFolder refresh timed out id=\(folderID.uuidString, privacy: .public) name=\(name, privacy: .public) after \(Self.seconds(self.refreshTimeout), format: .fixed(precision: 2))s"
             )
         }
     }
@@ -215,6 +219,8 @@ final class FastFolderStore {
                 snapshot: snapshot,
                 elapsed: startedAt.duration(to: .now)
             )
+        } catch is CancellationError {
+            return .failed(elapsed: startedAt.duration(to: .now))
         } catch {
             Log.service.error(
                 "FastFolder refresh failed for \(folder.name, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -349,11 +355,13 @@ final class FastFolderStore {
                 return
             }
 
+            cancelRefresh(folderID: folder.id)
             statuses[folder.id] = .available
             finder.openInNewFinderWindow(resolved.url)
             Log.ui.info("FastFolder opened \(folder.name, privacy: .public)")
         } catch {
             if folders.contains(where: { $0.id == folder.id }) {
+                cancelRefresh(folderID: folder.id)
                 statuses[folder.id] = .unavailable
             }
             Log.service.error(

@@ -25,7 +25,7 @@ enum FastFolderBookmarkError: LocalizedError {
     }
 }
 
-protocol FastFolderBookmarkServiceProtocol: Sendable {
+nonisolated protocol FastFolderBookmarkServiceProtocol: Sendable {
     func makeBookmark(for url: URL) async throws -> Data
     func resolve(_ bookmark: Data) async throws -> (url: URL, isStale: Bool)
     func snapshot(of url: URL) async throws -> FolderSnapshot
@@ -33,7 +33,7 @@ protocol FastFolderBookmarkServiceProtocol: Sendable {
 
 /// Runs blocking bookmark and filesystem calls on a concurrent dispatch queue.
 /// A stalled network volume therefore does not serialize checks for other folders.
-struct FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
+nonisolated struct FastFolderBookmarkService: FastFolderBookmarkServiceProtocol {
 
     private let queue = DispatchQueue(
         label: "com.panel.fastfolder.bookmark",

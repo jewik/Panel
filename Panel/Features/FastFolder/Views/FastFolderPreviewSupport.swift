@@ -29,7 +29,7 @@ final class InMemoryFastFolderStorage: FastFolderStorage {
 
 // MARK: - Preview services
 
-struct PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
+nonisolated struct PreviewBookmarkService: FastFolderBookmarkServiceProtocol {
 
     struct Entry: Sendable {
         let url: URL
