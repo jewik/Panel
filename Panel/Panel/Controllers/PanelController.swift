@@ -86,4 +86,12 @@ final class PanelController {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
     }
     
+    func toggleGlassInterface(){
+        panelState.useGlassPanelSurface.toggle()
+    }
+    
+    func isGlassInterface() -> Bool {
+        return panelState.useGlassPanelSurface
+    }
+    
 }

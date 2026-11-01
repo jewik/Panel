@@ -48,7 +48,7 @@ final class FloatingPanel: NSPanel {
         false
     }
 
-//    @objc func _hasActiveAppearanceIgnoringKeyFocus() -> Bool {
-//        true
-//    }
+    @objc func _hasActiveAppearanceIgnoringKeyFocus() -> Bool {
+        true
+    }
 }
