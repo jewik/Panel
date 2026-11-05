@@ -13,7 +13,7 @@ enum FastFolderMetrics {
     static let itemSpacing: CGFloat = 8
     static let horizontalPadding: CGFloat = 10
     static let verticalPadding: CGFloat = 4
-    static var shelfHeight: CGFloat { itemHeight + verticalPadding * 2 }
+    static var shelfHeight: CGFloat { itemHeight + verticalPadding}
 
     static let placeholderWidth: CGFloat = 400
     static let maximumShelfWidth: CGFloat = 900

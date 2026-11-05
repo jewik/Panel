@@ -136,6 +136,18 @@ struct NavigationRowView: View {
                 }
             )
 
+            DotButton(
+                color: .orange,
+                showInner: controller.checkPreset(.player),
+                action: {
+                    controller.showPreset(.player)
+                },
+                innerContent: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.orange)
+                }
+            )
             
         }
     }
@@ -152,8 +164,8 @@ struct NavigationRowView: View {
         )
         
     }
-    .frame(width: 190, height: 30)
+    .frame(width: 215, height: 30)
     //    .background(.red.opacity(0.4))
-    .frame(width: 200, height: 100)
+    .frame(width: 400, height: 100)
     .environment(AppContainer().controller)
 }

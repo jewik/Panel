@@ -9,7 +9,7 @@ import SwiftUI
 
 struct BarView: View {
     
-    @Environment(PanelController.self) private var controller
+//    @Environment(PanelController.self) private var controller
 
     @Binding var value: Double
     @Binding var isSliderActive: Bool
@@ -74,11 +74,12 @@ struct BarView: View {
                             withAnimation(.interpolatingSpring(stiffness: 60, damping: 15)) {
                                 self.value = min(max(0.0, inertialValue), 1.0)
                             }
-                        }                    }
+                        }
+                    }
             )
         }
         .frame(width: 200, height: isSliderActive && (isHovered || isDragging) ? 8 : 5)
-        .padding([.horizontal, .top], 5)
+        .padding([.horizontal, .top], isHovered ? 5 : 3)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -110,8 +111,8 @@ struct BarView: View {
 
 #Preview {
     
-    @State var sliderBarValue: Double = 1
-    @State var isSliderActive: Bool = false
+    @Previewable @State var sliderBarValue: Double = 1
+    @Previewable @State var isSliderActive: Bool = true
 
     BarView(
         value: $sliderBarValue,
@@ -119,5 +120,8 @@ struct BarView: View {
         action: {}
     )
         .environment(AppContainer().controller)
+        .background(.red.opacity(0.1))
         .frame(width: 300, height: 140, alignment: .bottom)
 }
+
+

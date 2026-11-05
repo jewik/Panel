@@ -135,6 +135,9 @@ struct RootView: View {
             case .airdrop:
                 AirDropUI()
                     .transition(.collapseExpandTransition)
+            case .player:
+                PlayerUI()
+                    .transition(.collapseExpandTransition)
             case .settings:
                 SettingsUI()
                     .transition(.collapseExpandTransition)
@@ -166,7 +169,7 @@ struct RootView: View {
             )
             
         }
-        .frame(width: 190, height: 30)
+        .frame(width: 215, height: 30)
     }
     
     

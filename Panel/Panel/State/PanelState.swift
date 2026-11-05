@@ -9,6 +9,7 @@ enum PanelPreset {
     case share
     case fastfolder
     case airdrop
+    case player
     case settings
 }
 

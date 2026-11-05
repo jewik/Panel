@@ -9,7 +9,16 @@ import SwiftUI
 struct HomeUI: View {
 
     var body: some View {
-        FastFolderView()
+        HStack(alignment: .center , spacing: 0){
+            FastFolderView()
+            
+            Divider()
+                .padding(.vertical, 10)
+                .frame(height: 100)
+            
+            PlayerUI()
+        }
+//        FastFolderView()
     }
     
 }
