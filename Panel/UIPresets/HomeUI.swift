@@ -43,5 +43,6 @@ struct HomeUI: View {
         ])
     )
     .environment(PanelController(panelState: PanelState()))
+    .environment(makePreviewPlayerStore())
 }
 #endif

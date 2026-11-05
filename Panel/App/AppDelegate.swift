@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let container = AppContainer()
 
     private var overlayPanel: FloatingPanel?
+    private var isTerminationInProgress = false
     
     private let panelSize = NSSize(
         width: 1000,
@@ -24,7 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ notification: Notification
     ) {
         NSApp.setActivationPolicy(.accessory)
-        
+
+        container.start()
         showOverlayPanel()
         observeScreenChanges()
         
@@ -33,6 +35,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         Log.general.info("Application will terminate.")
+    }
+
+    func applicationShouldTerminate(
+        _ sender: NSApplication
+    ) -> NSApplication.TerminateReply {
+        guard !isTerminationInProgress else {
+            return .terminateLater
+        }
+
+        isTerminationInProgress = true
+        Task {
+            await container.stop()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
     
     // MARK: - Panel
@@ -120,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(container.controller)
             .environment(container.airDropService)
             .environment(container.fastFolderStore)
+            .environment(container.playerStore)
         
         let hostingView = NSHostingView(
             rootView: rootView

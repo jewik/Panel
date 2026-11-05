@@ -198,10 +198,14 @@ struct RootView: View {
 
 
 
+#if DEBUG
 #Preview {
     RootView()
-        .environment(AppContainer().controller)
-        .environment(AppContainer().airDropService)
+        .environment(PanelController(panelState: PanelState()))
+        .environment(AirDropService())
+        .environment(makePreviewFastFolderStore([]))
+        .environment(makePreviewPlayerStore())
         .background(.gray.opacity(0.1))
 }
+#endif
 

@@ -14,3 +14,10 @@ struct PlayerUI: View {
     }
     
 }
+
+#if DEBUG
+#Preview {
+    PlayerUI()
+        .environment(makePreviewPlayerStore())
+}
+#endif

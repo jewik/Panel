@@ -40,6 +40,9 @@ final class FastFolderStore {
     private(set) var statuses: [FastFolder.ID: FastFolderStatus] = [:]
     private(set) var refreshingIDs: Set<FastFolder.ID> = []
 
+//
+    @ObservationIgnored private let ENABLE_REFRASH: Bool? = false
+    
     @ObservationIgnored private let storage: FastFolderStorage
     @ObservationIgnored private let bookmarkService: FastFolderBookmarkServiceProtocol
     @ObservationIgnored private let finder: FinderPresenting
@@ -106,6 +109,10 @@ final class FastFolderStore {
 
     /// Starts checks for every folder not already being checked and returns immediately.
     func refresh() {
+        
+        if let ENABLE_REFRASH, !ENABLE_REFRASH { return }
+        
+        
         for folder in folders {
             refresh(folderID: folder.id)
         }
