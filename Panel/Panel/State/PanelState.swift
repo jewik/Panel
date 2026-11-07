@@ -16,7 +16,7 @@ enum PanelPreset {
 @Observable
 final class PanelState {
     
-    var useGlassPanelSurface: Bool = false
+    var useGlassPanelSurface: Bool = true
     var isPanelPinned: Bool = false
     var isAutoPinSuppressed: Bool = false
     

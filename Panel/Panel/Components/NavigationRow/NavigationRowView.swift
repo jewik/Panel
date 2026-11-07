@@ -67,7 +67,7 @@ struct NavigationRowView: View {
             
             
             Divider()
-                .background(.secondary)
+                .background(Color.custsecondary)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 2)
             
@@ -103,7 +103,7 @@ struct NavigationRowView: View {
             )
             
             Divider()
-                .background(.secondary)
+                .background(Color.custsecondary)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 2)
             

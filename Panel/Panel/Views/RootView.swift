@@ -14,9 +14,11 @@ struct RootView: View {
     @State private var sliderBarValue: Double = 1
     @State private var isSliderActive: Bool = false
     
+    @State private var onBarHover: Bool = false
+    
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
-        ear: { height in min(height / 4, 40) },
-        angle: { height in min(height / 4 * 3, 50) }
+        ear: { height in min(height / 3, 40) },
+        angle: { height in min(height / 2, 50) }
     )
     
     
@@ -46,7 +48,6 @@ struct RootView: View {
                             contentSize = size
                         }
                     }
-                
                 
                 
             }
@@ -100,7 +101,7 @@ struct RootView: View {
                 
                 UnionPanelShape(radiusRules: panelRadiusRules)
                     .rotation(.degrees(180))
-                    .fill(.black.opacity(0.4))
+                    .fill(.black.opacity(0.5))
             } else {
                 UnionPanelShape(radiusRules: panelRadiusRules)
                     .rotation(.degrees(180))
@@ -110,12 +111,14 @@ struct RootView: View {
             
             
         }
+        
         .frame(
             width: contentSize.width
             + panelRadiusRules.earRadius(for: contentSize.height) * 2,
             height: contentSize.height,
             alignment: .bottom
         )
+        
         
         
     }
@@ -125,7 +128,9 @@ struct RootView: View {
         ZStack(alignment: .bottom){
             switch controller.getPreset() {
             case .collapsed:
-                EmptyView()
+                CollapsedUI(
+                    onAttention: $onBarHover
+                )
                     .transition(.collapseExpandTransition)
             case .home:
                 HomeUI()
@@ -160,7 +165,7 @@ struct RootView: View {
                     .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
                 
                 Capsule()
-                    .fill(.black.opacity(0.4))
+                    .fill(.black.opacity(0.5))
                 
             } else {
                 Capsule()
@@ -188,6 +193,11 @@ struct RootView: View {
                 controller.showPreset(.home)
             }
         )
+        .onHover{ hover in
+            withAnimation (.custsmooth) {
+                onBarHover = hover
+            }
+        }
     }
     
     

@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import Observation
 import os
@@ -18,6 +19,10 @@ final class PlayerStore {
         case .idle, .unavailable:
             nil
         }
+    }
+
+    var isNowPlaying: Bool {
+            presentedSnapshot?.isPlaying == true
     }
 
     var isReconnecting: Bool {

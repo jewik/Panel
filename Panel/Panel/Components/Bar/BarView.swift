@@ -21,7 +21,7 @@ struct BarView: View {
     @State private var startValue: Double = 0.0
     
     let backColor: Color = Color.white.opacity(0.12)
-    let defaultColor: Color = Color.secondary
+    let defaultColor: Color = Color.custsecondary
     let activeColor: Color = Color.white
     
     var body: some View {

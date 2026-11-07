@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class PlayerStoreTests: XCTestCase {
+    func testIsNowPlayingFollowsPresentedSnapshot() async {
+        let provider = PlayerProviderDouble(state: .idle)
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            idleTransitionDelay: .milliseconds(20)
+        )
+        store.startMonitoring()
+
+        XCTAssertFalse(store.isNowPlaying)
+
+        await provider.emit(.active(.fixture))
+        await waitForStateChange()
+        XCTAssertTrue(store.isNowPlaying)
+
+        await provider.emit(.active(.pausedFixture))
+        await waitForStateChange()
+        XCTAssertFalse(store.isNowPlaying)
+
+        await provider.emit(.idle)
+        try? await Task.sleep(for: .milliseconds(40))
+        XCTAssertFalse(store.isNowPlaying)
+        store.stopMonitoring()
+    }
+
     func testPlaybackActionsMapToSupportedCommands() async {
         let provider = PlayerProviderDouble(state: .active(.fixture))
         let controller = PlaybackControllerDouble()
@@ -152,23 +177,28 @@ private actor PlaybackControllerDouble: SystemPlaybackControlling {
 }
 
 nonisolated private extension NowPlayingSnapshot {
-    static let fixture = NowPlayingSnapshot(
-        source: PlaybackSource(
-            processIdentifier: 1,
-            bundleIdentifier: "test.player",
-            parentApplicationBundleIdentifier: nil
-        ),
-        isPlaying: true,
-        title: "Track",
-        artist: "Artist",
-        album: nil,
-        duration: 120,
-        elapsedTime: 10,
-        refreshedAt: .now,
-        playbackRate: 1,
-        artworkData: nil,
-        artworkMIMEType: nil,
-        mediaType: "audio",
-        contentItemIdentifier: "fixture"
-    )
+    static let fixture = fixture(isPlaying: true)
+    static let pausedFixture = fixture(isPlaying: false)
+
+    static func fixture(isPlaying: Bool) -> NowPlayingSnapshot {
+        NowPlayingSnapshot(
+            source: PlaybackSource(
+                processIdentifier: 1,
+                bundleIdentifier: "test.player",
+                parentApplicationBundleIdentifier: nil
+            ),
+            isPlaying: isPlaying,
+            title: "Track",
+            artist: "Artist",
+            album: nil,
+            duration: 120,
+            elapsedTime: 10,
+            refreshedAt: .now,
+            playbackRate: isPlaying ? 1 : 0,
+            artworkData: nil,
+            artworkMIMEType: nil,
+            mediaType: "audio",
+            contentItemIdentifier: "fixture"
+        )
+    }
 }

@@ -39,13 +39,14 @@ struct PlayerView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(snapshot.displayTitle)
                         .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                     Text(snapshot.displaySubtitle ?? snapshot.source.displayName)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.custsecondary)
                         .lineLimit(1)
                 }
-                .frame(width: 180)
+                .frame(width: 180, alignment: .leading)
 
                 playbackControls(isPlaying: snapshot.isPlaying)
             }
@@ -159,6 +160,7 @@ struct PlayerView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -197,7 +199,7 @@ private struct ReconnectingMarker: View {
     ZStack {
         PanelShape()
             .fill(.black)
-            .frame(width: 240, height: 100)
+            .frame(width: 300, height: 100)
         PlayerView()
     }
     .frame(width: 300, height: 200, alignment: .bottom)
