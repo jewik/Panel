@@ -31,6 +31,15 @@ nonisolated struct NowPlayingFailure: Error, Equatable, Sendable {
     let kind: Kind
     let message: String
     let recoverySuggestion: String?
+
+    var isRetryableConnectionFailure: Bool {
+        switch kind {
+        case .launchFailed, .malformedProtocol, .helperExited:
+            true
+        case .unsupportedSystem, .missingResource, .incompatibleArchitecture, .commandFailed:
+            false
+        }
+    }
 }
 
 nonisolated struct NowPlayingDiagnostic: Equatable, Sendable, Identifiable {

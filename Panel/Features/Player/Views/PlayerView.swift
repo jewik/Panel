@@ -6,21 +6,34 @@ struct PlayerView: View {
 
     var body: some View {
         Group {
-            switch store.state {
-            case .idle:
-                idleContent
-            case .active(let snapshot):
-                activeContent(snapshot)
-            case .unavailable:
-                unavailableContent
+            if let snapshot = store.presentedSnapshot {
+                activeContent(snapshot, isReconnecting: store.isReconnecting)
+            } else {
+                switch store.state {
+                case .idle:
+                    idleContent
+                case .active:
+                    EmptyView()
+                case .unavailable:
+                    unavailableContent
+                }
             }
         }
-        .frame(width: 240, height: 100, alignment: .leading)
+        .frame(width: 300, height: 100, alignment: .leading)
     }
 
-    private func activeContent(_ snapshot: NowPlayingSnapshot) -> some View {
+    private func activeContent(
+        _ snapshot: NowPlayingSnapshot,
+        isReconnecting: Bool
+    ) -> some View {
         HStack(alignment: .center, spacing: 0) {
             artwork(snapshot.artworkData)
+                .overlay(alignment: .topTrailing) {
+                    if isReconnecting {
+                        ReconnectingMarker()
+                            .padding(8)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 7) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -32,6 +45,7 @@ struct PlayerView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(width: 180)
 
                 playbackControls(isPlaying: snapshot.isPlaying)
             }
@@ -56,7 +70,7 @@ struct PlayerView: View {
             }
         }
         .frame(width: 70, height: 70)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(15)
         .frame(width: 100, height: 100)
     }
@@ -89,8 +103,7 @@ struct PlayerView: View {
                     .accessibilityLabel("Playback command failed")
             }
         }
-        .disabled(store.isPerformingPlaybackCommand)
-        .opacity(store.isPerformingPlaybackCommand ? 0.55 : 1)
+        .allowsHitTesting(!store.isPerformingPlaybackCommand)
     }
 
     private var idleContent: some View {
@@ -132,11 +145,38 @@ struct PlayerView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+private struct ReconnectingMarker: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(.orange.opacity(0.65), lineWidth: 1)
+                .frame(width: 10, height: 10)
+                .scaleEffect(isPulsing ? 1.7 : 0.8)
+                .opacity(isPulsing ? 0 : 0.9)
+
+            Circle()
+                .fill(.orange)
+                .frame(width: 5, height: 5)
+                .shadow(color: .orange.opacity(0.7), radius: 3)
+        }
+        .frame(width: 16, height: 16)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.15).repeatForever(autoreverses: false)) {
+                isPulsing = true
+            }
+        }
+        .help("Reconnecting to media helper")
+        .accessibilityLabel("Reconnecting to media helper")
     }
 }
 

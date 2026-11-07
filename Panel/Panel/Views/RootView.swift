@@ -186,8 +186,8 @@ struct RootView: View {
     
     private func selectAnimation(from previous: CGSize, to current: CGSize) -> Animation {
         if (
-            current.width > previous.width &&
-            current.height > previous.height
+            current.width >= previous.width &&
+            current.height >= previous.height
         ){
             return .custbounsy
         }

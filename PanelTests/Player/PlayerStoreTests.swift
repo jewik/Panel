@@ -52,12 +52,56 @@ final class PlayerStoreTests: XCTestCase {
         XCTAssertEqual(store.playbackCommandError, "Command failed in test")
     }
 
+    func testRetryableFailureKeepsLastSnapshotVisibleWhileReconnecting() async {
+        let provider = PlayerProviderDouble(state: .active(.fixture))
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture)
+        )
+        store.startMonitoring()
+
+        await provider.emit(.unavailable(NowPlayingFailure(
+            kind: .helperExited,
+            message: "Connection lost",
+            recoverySuggestion: nil
+        )))
+        await waitForStateChange()
+
+        XCTAssertEqual(store.presentedSnapshot, .fixture)
+        XCTAssertTrue(store.isReconnecting)
+        store.stopMonitoring()
+    }
+
+    func testPermanentFailureDoesNotKeepLastSnapshotVisible() async {
+        let failure = NowPlayingFailure(
+            kind: .missingResource,
+            message: "Helper is missing",
+            recoverySuggestion: nil
+        )
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .unavailable(failure)),
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture)
+        )
+        store.startMonitoring()
+        await waitForStateChange()
+
+        XCTAssertNil(store.presentedSnapshot)
+        XCTAssertFalse(store.isReconnecting)
+        store.stopMonitoring()
+    }
+
     private func waitForCommandToFinish(_ store: PlayerStore) async {
         for _ in 0..<50 {
             if !store.isPerformingPlaybackCommand { return }
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTFail("Playback command did not finish")
+    }
+
+    private func waitForStateChange() async {
+        try? await Task.sleep(for: .milliseconds(20))
     }
 }
 

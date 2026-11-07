@@ -5,7 +5,9 @@
 //  Created by Usanin Ivan on 27.10.2026.
 //
 
+
 import SwiftUI
+import os
 
 struct FastFolderView: View {
 
@@ -30,6 +32,7 @@ struct FastFolderView: View {
             .frame(width: shelfWidth, height: FastFolderMetrics.shelfHeight)
             .task {
                 store.refresh()
+                Log.ui.info("Folders refresh called")
             }
     }
 

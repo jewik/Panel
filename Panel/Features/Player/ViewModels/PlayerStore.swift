@@ -9,6 +9,23 @@ final class PlayerStore {
     private(set) var isPerformingPlaybackCommand = false
     private(set) var playbackCommandError: String?
 
+    var presentedSnapshot: NowPlayingSnapshot? {
+        switch state {
+        case .active(let snapshot):
+            snapshot
+        case .unavailable(let failure) where failure.isRetryableConnectionFailure:
+            lastActiveSnapshot
+        case .idle, .unavailable:
+            nil
+        }
+    }
+
+    var isReconnecting: Bool {
+        guard lastActiveSnapshot != nil,
+              case .unavailable(let failure) = state else { return false }
+        return failure.isRetryableConnectionFailure
+    }
+
     @ObservationIgnored private let provider: any SystemNowPlayingProviding
     @ObservationIgnored private let playbackController: any SystemPlaybackControlling
     @ObservationIgnored private let idleTransitionDelay: Duration
@@ -16,6 +33,7 @@ final class PlayerStore {
     @ObservationIgnored private var pendingIdleTask: Task<Void, Never>?
     @ObservationIgnored private var playbackCommandTask: Task<Void, Never>?
     @ObservationIgnored private var rawState: SystemNowPlayingState
+    @ObservationIgnored private var lastActiveSnapshot: NowPlayingSnapshot?
 
     init(
         provider: any SystemNowPlayingProviding,
@@ -27,6 +45,9 @@ final class PlayerStore {
         self.playbackController = playbackController
         self.state = initialState
         self.rawState = initialState
+        if case .active(let snapshot) = initialState {
+            self.lastActiveSnapshot = snapshot
+        }
         self.idleTransitionDelay = idleTransitionDelay
     }
 
@@ -104,6 +125,7 @@ final class PlayerStore {
             case .idle:
                 guard case .active = state else {
                     state = .idle
+                    lastActiveSnapshot = nil
                     return
                 }
                 pendingIdleTask?.cancel()
@@ -114,10 +136,17 @@ final class PlayerStore {
                           let self,
                           self.rawState == .idle else { return }
                     self.state = .idle
+                    self.lastActiveSnapshot = nil
                     self.pendingIdleTask = nil
                 }
 
-            case .active, .unavailable:
+            case .active(let snapshot):
+                pendingIdleTask?.cancel()
+                pendingIdleTask = nil
+                lastActiveSnapshot = snapshot
+                state = newState
+
+            case .unavailable:
                 pendingIdleTask?.cancel()
                 pendingIdleTask = nil
                 state = newState

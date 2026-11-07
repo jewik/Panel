@@ -46,6 +46,8 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
     }
 
     func retry() {
+        restartTask?.cancel()
+        restartTask = nil
         stopProcess(markExplicit: false)
         explicitlyStopped = false
         consecutiveRestarts = 0
@@ -135,6 +137,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             launchIdentifier = identifier
             recentStandardError.removeAll(keepingCapacity: true)
             lineDecoder.reset()
+            normalizer.reset()
 
             try process.run()
             emitDiagnostic(
@@ -153,6 +156,9 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             )
             publish(.unavailable(failure))
             emitDiagnostic(.error, failure.message)
+            if failure.isRetryableConnectionFailure {
+                scheduleRestart()
+            }
         }
     }
 
@@ -183,6 +189,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             publish(.unavailable(failure))
             emitDiagnostic(.error, "Protocol failure: \(failure.message)")
             stopProcess(markExplicit: false)
+            scheduleRestart()
         }
     }
 
@@ -222,6 +229,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
                 recoverySuggestion: "Retry. This macOS release may be incompatible."
             )))
             emitDiagnostic(.error, message)
+            scheduleRestart()
             return
         }
 
@@ -229,7 +237,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
     }
 
     private func scheduleRestart() {
-        guard !explicitlyStopped else { return }
+        guard !explicitlyStopped, process == nil else { return }
         consecutiveRestarts += 1
         let exponent = min(consecutiveRestarts - 1, 5)
         let delay = min(pow(2.0, Double(exponent)) * 0.5, 15)
@@ -244,6 +252,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
 
     private func restartAfterDelay() {
         guard !explicitlyStopped, process == nil else { return }
+        restartTask = nil
         launchHelper()
     }
 

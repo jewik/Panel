@@ -10,13 +10,14 @@ struct HomeUI: View {
 
     var body: some View {
         HStack(alignment: .center , spacing: 0){
-            FastFolderView()
+            
+            PlayerUI()
             
             Divider()
                 .padding(.vertical, 10)
                 .frame(height: 100)
-            
-            PlayerUI()
+
+            FastFolderView()
         }
 //        FastFolderView()
     }
