@@ -15,7 +15,7 @@ protocol FastFolderStorage {
 
 final class UserDefaultsFastFolderStorage: FastFolderStorage {
     
-    private let ENABLE_REFRESH: Bool? = false
+    private let ENABLE_REFRESH: Bool? = true
 
     private static let storageKey = "fastFolders"
 

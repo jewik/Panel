@@ -97,6 +97,10 @@ struct RootView: View {
                     height: contentSize.height,
                     radiusRules: panelRadiusRules
                 )
+                
+                UnionPanelShape(radiusRules: panelRadiusRules)
+                    .rotation(.degrees(180))
+                    .fill(.black.opacity(0.4))
             } else {
                 UnionPanelShape(radiusRules: panelRadiusRules)
                     .rotation(.degrees(180))
@@ -154,6 +158,9 @@ struct RootView: View {
                 Color.clear
                     .glassEffect(.clear, in: Capsule())
                     .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+                
+                Capsule()
+                    .fill(.black.opacity(0.4))
                 
             } else {
                 Capsule()

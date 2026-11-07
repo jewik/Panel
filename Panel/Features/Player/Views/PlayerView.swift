@@ -54,11 +54,16 @@ struct PlayerView: View {
     }
 
     private func artwork(_ data: Data?) -> some View {
-        Group {
+        ZStack {
             if let data, let image = NSImage(data: data) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
+                artworkImage(image)
+                    .saturation(1.25)
+                    .blur(radius: 12)
+                    .scaleEffect(1.08)
+                    .opacity(0.6)
+                    .accessibilityHidden(true)
+
+                artworkImage(image)
             } else {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -67,12 +72,19 @@ struct PlayerView: View {
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.white.opacity(0.78))
                 }
+                .frame(width: 70, height: 70)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
         }
-        .frame(width: 70, height: 70)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(15)
         .frame(width: 100, height: 100)
+    }
+
+    private func artworkImage(_ image: NSImage) -> some View {
+        Image(nsImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 70, height: 70)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func playbackControls(isPlaying: Bool) -> some View {

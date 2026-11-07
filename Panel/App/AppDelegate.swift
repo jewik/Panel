@@ -12,6 +12,7 @@ import CoreFoundation
 final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let container = AppContainer()
+    private let skyLightSpace = SkyLightSpace.shared
 
     private var overlayPanel: FloatingPanel?
     private var isTerminationInProgress = false
@@ -34,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
+        skyLightSpace.stop()
         Log.general.info("Application will terminate.")
     }
 
@@ -73,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayPanel = panel
         
         panel.orderFrontRegardless()
+        skyLightSpace.add(panel)
     }
     
     private func observeScreenChanges() {
