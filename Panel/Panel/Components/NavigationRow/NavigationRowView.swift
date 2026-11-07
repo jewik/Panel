@@ -33,15 +33,15 @@ struct NavigationRowView: View {
             
             DotButton(
                 color: .yellow,
-                showInner: controller.checkPreset(.home),
+                showInner: controller.checkPreset(.settings),
                 action: {
-                    controller.showPreset(.home)
+                    controller.showPreset(.settings)
                 },
                 innerContent: {
                     Image(systemName:
-                            controller.checkPreset(.home) ?
-                          "house.fill":
-                            "house"
+                            controller.checkPreset(.settings) ?
+                          "gearshape.fill":
+                            "gearshape"
                     )
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.yellow)
@@ -62,6 +62,43 @@ struct NavigationRowView: View {
                     )
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.green)
+                }
+            )
+            
+            
+            Divider()
+                .background(.secondary)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 2)
+            
+            
+            DotButton(
+                color: .white,
+                showInner: controller.checkPreset(.home),
+                action: {
+                    controller.showPreset(.home)
+                },
+                innerContent: {
+                    Image(systemName:
+                            controller.checkPreset(.home) ?
+                          "house.fill":
+                            "house"
+                    )
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                }
+            )
+            
+            DotButton(
+                color: .white,
+                showInner: controller.checkPreset(.share),
+                action: {
+                    controller.showPreset(.share)
+                },
+                innerContent: {
+                    Image(systemName: "airplayaudio")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
                 }
             )
             
@@ -98,28 +135,20 @@ struct NavigationRowView: View {
                         .foregroundStyle(.indigo)
                 }
             )
-            
-            Divider()
-                .background(.secondary)
-                .padding(.vertical, 6)
-                .padding(.horizontal, 2)
-            
+
             DotButton(
-                color: .white,
-                showInner: controller.checkPreset(.settings),
+                color: .orange,
+                showInner: controller.checkPreset(.player),
                 action: {
-                    controller.showPreset(.settings)
+                    controller.showPreset(.player)
                 },
                 innerContent: {
-                    Image(systemName:
-                            controller.checkPreset(.settings) ?
-                          "gearshape.fill":
-                            "gearshape"
-                    )
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.orange)
                 }
             )
+            
         }
     }
 }
@@ -135,8 +164,8 @@ struct NavigationRowView: View {
         )
         
     }
-    .frame(width: 170, height: 30)
+    .frame(width: 215, height: 30)
     //    .background(.red.opacity(0.4))
-    .frame(width: 200, height: 100)
+    .frame(width: 400, height: 100)
     .environment(AppContainer().controller)
 }

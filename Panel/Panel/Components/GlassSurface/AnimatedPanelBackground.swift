@@ -19,24 +19,32 @@ struct AnimatedPanelBackground: View, Animatable {
     }
     
     var body: some View {
-        // 1. Статический холст градиента фиксированного размера
-        LinearGradient(
-            stops: [
-                .init(color: .black.opacity(0.3), location: 1),
-                .init(color: .black, location: 0.175),
-                .init(color: .black, location: 0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        // Задаем жесткие размеры статического прямоугольника-подложки
-        .frame(width: 1000, height: 200)
+        let blackStop = min(1, 20 / height)
         
-        // 2. Используем динамическую фигуру как clipShape
-        .clipShape(
-            UnionPanelShape(radiusRules: radiusRules)
-                .rotation(.degrees(180))
-        )
-
+        
+        UnionPanelShape(radiusRules: radiusRules)
+            .rotation(.degrees(180))
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0), location: 0),
+                        .init(color: .black.opacity(blackStop), location: 0.5),
+                        .init(color: .black, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        
     }
+}
+
+#Preview {
+    AnimatedPanelBackground(
+        height: 100,
+        radiusRules: UnionPanelShape.RadiusRules(
+            ear: { height in min(height / 4, 40) },
+            angle: { height in min(height / 4 * 3, 50) }
+        )
+    )
 }

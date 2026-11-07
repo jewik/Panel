@@ -11,6 +11,9 @@ struct RootView: View {
     @State private var contentSize: CGSize = .zero
     @State private var isDragging: Bool = false
     
+    @State private var sliderBarValue: Double = 1
+    @State private var isSliderActive: Bool = false
+    
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
         ear: { height in min(height / 4, 40) },
         angle: { height in min(height / 4 * 3, 50) }
@@ -39,12 +42,12 @@ struct RootView: View {
                     } action: { size in
                         Log.ui.info("PanelView resize to: \(String(describing: size))")
                         
-                        withAnimation(.custsmooth) {
+                        withAnimation(selectAnimation(from: contentSize, to: size)) {
                             contentSize = size
                         }
                     }
                 
-
+                
                 
             }
             
@@ -60,7 +63,7 @@ struct RootView: View {
             }
             .onChange(of: isDragging) {oldValue, newValue in
                 if newValue {
-                    controller.showPreset(.airdrop)
+                    controller.showPreset(.share)
                 }
             }
             
@@ -79,10 +82,31 @@ struct RootView: View {
     private var surface : some View {
         ZStack (alignment: .top) {
             
-            UnionPanelShape(radiusRules: panelRadiusRules)
-                .rotation(.degrees(180))
-                .fill(.black)
-                .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+            if controller.isGlassInterface() {
+                Color.clear
+                    .glassEffect(.clear, in: UnionPanelShape(radiusRules: panelRadiusRules)
+                        .rotation(.degrees(180)))
+                    .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+                
+                //                UnionPanelShape(radiusRules: panelRadiusRules)
+                //                    .rotation(.degrees(180))
+                //                    .fill(.black)
+                //                    .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+                
+                AnimatedPanelBackground(
+                    height: contentSize.height,
+                    radiusRules: panelRadiusRules
+                )
+                
+                UnionPanelShape(radiusRules: panelRadiusRules)
+                    .rotation(.degrees(180))
+                    .fill(.black.opacity(0.4))
+            } else {
+                UnionPanelShape(radiusRules: panelRadiusRules)
+                    .rotation(.degrees(180))
+                    .fill(.black)
+                    .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+            }
             
             
         }
@@ -106,11 +130,17 @@ struct RootView: View {
             case .home:
                 HomeUI()
                     .transition(.collapseExpandTransition)
+            case .share:
+                ShareUI()
+                    .transition(.collapseExpandTransition)
             case .fastfolder:
                 FastFolderUI()
                     .transition(.collapseExpandTransition)
             case .airdrop:
                 AirDropUI()
+                    .transition(.collapseExpandTransition)
+            case .player:
+                PlayerUI()
                     .transition(.collapseExpandTransition)
             case .settings:
                 SettingsUI()
@@ -123,35 +153,66 @@ struct RootView: View {
     
     private var navigation: some View {
         ZStack(alignment: .center) {
-            Capsule()
-                .fill(.black)
-                .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
- 
             
-            //            Color.clear
-            //                .glassEffect(.clear, in: Capsule())
-            //                .frame(width: 80, height: 30)
+            if controller.isGlassInterface() {
+                Color.clear
+                    .glassEffect(.clear, in: Capsule())
+                    .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+                
+                Capsule()
+                    .fill(.black.opacity(0.4))
+                
+            } else {
+                Capsule()
+                    .fill(.black)
+                    .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
+            }
+            
+            
+            
             
             NavigationRowView(
                 terminateApplication: { NSApp.terminate(nil) }
             )
             
         }
-        .frame(width: 170, height: 30)
+        .frame(width: 215, height: 30)
     }
+    
     
     private var bar: some View {
-        BarView()
+        BarView(
+            value: $sliderBarValue,
+            isSliderActive: $isSliderActive,
+            action: {
+                controller.showPreset(.home)
+            }
+        )
+    }
+    
+    
+    private func selectAnimation(from previous: CGSize, to current: CGSize) -> Animation {
+        if (
+            current.width >= previous.width &&
+            current.height >= previous.height
+        ){
+            return .custbounsy
+        }
+        return .custsmooth
     }
     
 }
 
 
 
+#if DEBUG
 #Preview {
     RootView()
-        .environment(AppContainer().controller)
-        .environment(AppContainer().airDropService)
+        .environment(PanelController(panelState: PanelState()))
+        .environment(AirDropService())
+        .environment(makePreviewFastFolderStore([]))
+        .environment(makePreviewPlayerStore())
         .background(.gray.opacity(0.1))
 }
+#endif
 

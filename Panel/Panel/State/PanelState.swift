@@ -6,8 +6,10 @@ import SwiftUI
 enum PanelPreset {
     case collapsed
     case home
+    case share
     case fastfolder
     case airdrop
+    case player
     case settings
 }
 

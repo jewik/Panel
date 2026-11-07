@@ -14,6 +14,8 @@ protocol FastFolderStorage {
 }
 
 final class UserDefaultsFastFolderStorage: FastFolderStorage {
+    
+    private let ENABLE_REFRESH: Bool? = true
 
     private static let storageKey = "fastFolders"
 
@@ -24,6 +26,9 @@ final class UserDefaultsFastFolderStorage: FastFolderStorage {
     }
 
     func load() -> [FastFolder] {
+        
+        if let ENABLE_REFRESH, !ENABLE_REFRESH { return [] }
+        
         guard let data = defaults.data(forKey: Self.storageKey) else {
             return []
         }
