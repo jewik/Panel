@@ -90,90 +90,49 @@ private struct ArtworkIdentity: Equatable {
 }
 
 private enum ArtworkAccentColor {
-    private static let sampleSize = 24
-
     static func color(from data: Data?) -> Color {
         guard let data,
               let image = NSImage(data: data),
-              let bitmap = sampledBitmap(from: image) else { return .white }
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return .white }
 
-        var buckets = Array(repeating: ColorBucket(), count: 24)
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let didDraw = pixel.withUnsafeMutableBytes { buffer -> Bool in
+            guard let baseAddress = buffer.baseAddress,
+                  let context = CGContext(
+                    data: baseAddress,
+                    width: 1,
+                    height: 1,
+                    bitsPerComponent: 8,
+                    bytesPerRow: 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return false }
 
-        for x in 0..<sampleSize {
-            for y in 0..<sampleSize {
-                guard let color = bitmap.colorAt(x: x, y: y)?
-                    .usingColorSpace(.deviceRGB) else { continue }
-
-                var hue: CGFloat = 0
-                var saturation: CGFloat = 0
-                var brightness: CGFloat = 0
-                var alpha: CGFloat = 0
-                color.getHue(
-                    &hue,
-                    saturation: &saturation,
-                    brightness: &brightness,
-                    alpha: &alpha
-                )
-
-                guard alpha > 0.25, brightness > 0.08 else { continue }
-                let bucketIndex = min(Int(hue * CGFloat(buckets.count)), buckets.count - 1)
-                let weight = alpha * (0.25 + saturation * 1.5) * (0.5 + brightness)
-                buckets[bucketIndex].add(color, weight: weight)
-            }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
         }
 
-        guard let winner = buckets.max(by: { $0.weight < $1.weight }),
-              winner.weight > 0 else { return .white }
-        return winner.color
-    }
+        guard didDraw else { return .white }
 
-    private static func sampledBitmap(from image: NSImage) -> NSBitmapImageRep? {
-        guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: sampleSize,
-            pixelsHigh: sampleSize,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ), let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        let channels = pixel.prefix(3).map { Double($0) / 255 }
+        guard let highest = channels.max(),
+              let lowest = channels.min(),
+              highest > 0.05 else { return .white }
 
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        context.imageInterpolation = .medium
-        image.draw(
-            in: NSRect(x: 0, y: 0, width: sampleSize, height: sampleSize),
-            from: .zero,
-            operation: .copy,
-            fraction: 1
-        )
-        NSGraphicsContext.restoreGraphicsState()
-        return bitmap
-    }
-}
+        let range = highest - lowest
+        guard range / highest >= 0.12 else { return .white }
 
-private struct ColorBucket {
-    private(set) var red: CGFloat = 0
-    private(set) var green: CGFloat = 0
-    private(set) var blue: CGFloat = 0
-    private(set) var weight: CGFloat = 0
-
-    mutating func add(_ color: NSColor, weight newWeight: CGFloat) {
-        red += color.redComponent * newWeight
-        green += color.greenComponent * newWeight
-        blue += color.blueComponent * newWeight
-        weight += newWeight
-    }
-
-    var color: Color {
-        guard weight > 0 else { return .white }
+        let stretched = channels.map {
+            min(1, max(0, ($0 - lowest) / range * 0.86 + 0.06))
+        }
         return Color(
-            red: Double(red / weight),
-            green: Double(green / weight),
-            blue: Double(blue / weight)
+            .sRGB,
+            red: stretched[0],
+            green: stretched[1],
+            blue: stretched[2],
+            opacity: 1
         )
     }
 }
