@@ -100,6 +100,18 @@ final class PlayerStore {
     func playPrevious() { perform(.previousTrack) }
     func playNext() { perform(.nextTrack) }
 
+    func seek(toProgress progress: Double) {
+        guard let snapshot = presentedSnapshot,
+              snapshot.isPlaying,
+              let duration = snapshot.duration,
+              duration.isFinite,
+              duration > 0,
+              progress.isFinite else { return }
+
+        let clampedProgress = min(max(0, progress), 1)
+        perform(.seek(to: duration * clampedProgress))
+    }
+
     private func perform(_ command: PlaybackCommand) {
         guard !isPerformingPlaybackCommand else { return }
         isPerformingPlaybackCommand = true

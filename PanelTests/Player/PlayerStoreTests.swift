@@ -45,6 +45,21 @@ final class PlayerStoreTests: XCTestCase {
         XCTAssertEqual(commands, [.togglePlayPause, .nextTrack, .previousTrack])
     }
 
+    func testSeekMapsProgressToTrackPosition() async {
+        let controller = PlaybackControllerDouble()
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .active(.fixture)),
+            playbackController: controller,
+            initialState: .active(.fixture)
+        )
+
+        store.seek(toProgress: 0.5)
+        await waitForCommandToFinish(store)
+
+        let commands = await controller.recordedCommands()
+        XCTAssertEqual(commands, [.seek(to: 60)])
+    }
+
     func testIdleTransitionIsDelayed() async {
         let provider = PlayerProviderDouble(state: .active(.fixture))
         let store = PlayerStore(

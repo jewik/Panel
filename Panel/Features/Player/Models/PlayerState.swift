@@ -20,10 +20,11 @@ nonisolated enum SystemNowPlayingEvent: Equatable, Sendable {
     case diagnostic(NowPlayingDiagnostic)
 }
 
-nonisolated enum PlaybackCommand: Int, Equatable, Sendable {
-    case togglePlayPause = 2
-    case nextTrack = 4
-    case previousTrack = 5
+nonisolated enum PlaybackCommand: Equatable, Sendable {
+    case togglePlayPause
+    case nextTrack
+    case previousTrack
+    case seek(to: TimeInterval)
 }
 
 nonisolated struct NowPlayingFailure: Error, Equatable, Sendable {

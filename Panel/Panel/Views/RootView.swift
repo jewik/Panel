@@ -11,9 +11,10 @@ struct RootView: View {
     @State private var contentSize: CGSize = .zero
     @State private var isDragging: Bool = false
     
-    @State private var sliderBarValue: Double = 1
-    @State private var isSliderActive: Bool = false
-    @State private var sliderColor: Color = .white
+    @State private var barValue: Double = 1
+    @State private var isBarSliderActive: Bool = false
+    @State private var barAccentColor: Color = .white
+    @State private var isBarSliderDragging: Bool = false
     @State private var onBarHover: Bool = false
     
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
@@ -187,13 +188,22 @@ struct RootView: View {
     
     private var bar: some View {
         BarView(
-            value: $sliderBarValue,
-            isSliderActive: $isSliderActive,
-            accentColor: $sliderColor,
+            value: $barValue,
+            isSliderActive: $isBarSliderActive,
+            accentColor: $barAccentColor,
+            isSliderDragging: $isBarSliderDragging,
             action: {
                 controller.showPreset(.home)
             }
         )
+        .background {
+            PlayerBarBridge(
+                value: $barValue,
+                isSliderActive: $isBarSliderActive,
+                accentColor: $barAccentColor,
+                isSliderDragging: $isBarSliderDragging
+            )
+        }
         .onHover{ hover in
             withAnimation (.custsmooth) {
                 onBarHover = hover

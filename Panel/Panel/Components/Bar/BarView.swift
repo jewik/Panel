@@ -14,11 +14,11 @@ struct BarView: View {
     @Binding var value: Double
     @Binding var isSliderActive: Bool
     @Binding var accentColor: Color
+    @Binding var isSliderDragging: Bool
     var action: () -> Void
     
     @State private var isHovered: Bool = false
-    @State private var isDragging: Bool = false
-    // Храним значение, которое было у слайдера в момент нажатия мышью
+    @State private var isPressing: Bool = false
     @State private var startValue: Double = 0.0
     
     var activeColor: Color { accentColor }
@@ -38,19 +38,22 @@ struct BarView: View {
                 
                 // Заполняющая часть
                 Rectangle()
-                    .fill(isHovered || isDragging ? activeColor : defaultColor)
+                    .fill(isHovered || isPressing ? activeColor : defaultColor)
                     .frame(width: max(0, fillWidth))
             }
             .clipShape(Capsule())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
-                        if !isDragging {
-                            isDragging = true
+                        if !isPressing {
+                            isPressing = true
                             startValue = value
                         }
                         
                         if !isSliderActive { return }
+
+                        guard abs(gesture.translation.width) >= 1 else { return }
+                        isSliderDragging = true
                         
                         let delta = Double(gesture.translation.width / totalWidth)
                         let newValue = startValue + delta
@@ -59,33 +62,27 @@ struct BarView: View {
                         self.value = min(max(0.0, newValue), 1.0)
                     }
                     .onEnded { gesture in
-                        isDragging = false
+                        isPressing = false
+                        isSliderDragging = false
                         
                         if abs(gesture.translation.width) < 1 {
                             // Вызываем экшен кнопки
                             action()
-                        } else {
-                            
-                            if !isSliderActive { return }
-                            
-                            // Иначе обрабатываем инерцию слайдера, как раньше
-                            let predictedDelta = Double(gesture.predictedEndTranslation.width / totalWidth)
-                            let inertialValue = startValue + predictedDelta
-                            
-                            withAnimation(.interpolatingSpring(stiffness: 60, damping: 15)) {
-                                self.value = min(max(0.0, inertialValue), 1.0)
-                            }
                         }
                     }
             )
         }
-        .frame(width: 200, height: isSliderActive && (isHovered || isDragging) ? 8 : 5)
+        .frame(width: 200, height: isSliderActive && (isHovered || isPressing) ? 8 : 5)
         .padding([.horizontal, .top], isHovered ? 5 : 3)
         .onHover { hovering in
             isHovered = hovering
         }
+        .animation(.smooth(duration: 0.2), value: value)
         .animation(.smooth(duration: 0.2), value: isHovered)
-        .animation(.smooth(duration: 0.2), value: isDragging)
+        .animation(.smooth(duration: 0.2), value: isPressing)
+        .animation(.smooth(duration: 0.2), value: isSliderActive)
+        .animation(.smooth(duration: 0.2), value: accentColor)
+
     }
     
     
@@ -115,11 +112,13 @@ struct BarView: View {
     @Previewable @State var sliderBarValue: Double = 1
     @Previewable @State var isSliderActive: Bool = true
     @Previewable @State var accentColor: Color = .white
+    @Previewable @State var isSliderDragging: Bool = false
 
     BarView(
         value: $sliderBarValue,
         isSliderActive: $isSliderActive,
         accentColor: $accentColor,
+        isSliderDragging: $isSliderDragging,
         action: {}
     )
         .environment(AppContainer().controller)

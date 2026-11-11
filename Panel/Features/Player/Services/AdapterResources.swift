@@ -69,7 +69,19 @@ nonisolated struct AdapterResources: Sendable {
     }
 
     func playbackArguments(for command: PlaybackCommand) -> [String] {
-        invocationArguments(for: ["send", String(command.rawValue)])
+        switch command {
+        case .togglePlayPause:
+            return invocationArguments(for: ["send", "2"])
+        case .nextTrack:
+            return invocationArguments(for: ["send", "4"])
+        case .previousTrack:
+            return invocationArguments(for: ["send", "5"])
+        case .seek(let position):
+            let maximumPosition = Double(Int64.max) / 1_000_000
+            let safePosition = min(max(0, position), maximumPosition)
+            let microseconds = Int64((safePosition * 1_000_000).rounded())
+            return invocationArguments(for: ["seek", String(microseconds)])
+        }
     }
 }
 
