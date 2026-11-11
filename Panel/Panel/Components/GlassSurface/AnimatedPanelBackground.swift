@@ -27,8 +27,8 @@ struct AnimatedPanelBackground: View, Animatable {
             .fill(
                 LinearGradient(
                     stops: [
-                        .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(blackStop), location: 0.5),
+                        .init(color: .clear, location: 0),
+                        .init(color: .black.opacity(blackStop), location: 0),
                         .init(color: .black, location: 1)
                     ],
                     startPoint: .top,

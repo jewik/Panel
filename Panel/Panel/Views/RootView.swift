@@ -11,12 +11,15 @@ struct RootView: View {
     @State private var contentSize: CGSize = .zero
     @State private var isDragging: Bool = false
     
-    @State private var sliderBarValue: Double = 1
-    @State private var isSliderActive: Bool = false
+    @State private var barValue: Double = 1
+    @State private var isBarSliderActive: Bool = false
+    @State private var barAccentColor: Color = .white
+    @State private var isBarSliderDragging: Bool = false
+    @State private var onBarHover: Bool = false
     
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
-        ear: { height in min(height / 4, 40) },
-        angle: { height in min(height / 4 * 3, 50) }
+        ear: { height in min(height / 3, 40) },
+        angle: { height in min(height / 2, 50) }
     )
     
     
@@ -46,7 +49,6 @@ struct RootView: View {
                             contentSize = size
                         }
                     }
-                
                 
                 
             }
@@ -98,9 +100,9 @@ struct RootView: View {
                     radiusRules: panelRadiusRules
                 )
                 
-                UnionPanelShape(radiusRules: panelRadiusRules)
-                    .rotation(.degrees(180))
-                    .fill(.black.opacity(0.4))
+                //                UnionPanelShape(radiusRules: panelRadiusRules)
+                //                    .rotation(.degrees(180))
+                //                    .fill(.black.opacity(0.1))
             } else {
                 UnionPanelShape(radiusRules: panelRadiusRules)
                     .rotation(.degrees(180))
@@ -110,12 +112,14 @@ struct RootView: View {
             
             
         }
+        
         .frame(
             width: contentSize.width
             + panelRadiusRules.earRadius(for: contentSize.height) * 2,
             height: contentSize.height,
             alignment: .bottom
         )
+        
         
         
     }
@@ -125,8 +129,10 @@ struct RootView: View {
         ZStack(alignment: .bottom){
             switch controller.getPreset() {
             case .collapsed:
-                EmptyView()
-                    .transition(.collapseExpandTransition)
+                CollapsedUI(
+                    onAttention: $onBarHover
+                )
+                .transition(.collapseExpandTransition)
             case .home:
                 HomeUI()
                     .transition(.collapseExpandTransition)
@@ -160,7 +166,7 @@ struct RootView: View {
                     .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
                 
                 Capsule()
-                    .fill(.black.opacity(0.4))
+                    .fill(.black.opacity(0.2))
                 
             } else {
                 Capsule()
@@ -182,12 +188,27 @@ struct RootView: View {
     
     private var bar: some View {
         BarView(
-            value: $sliderBarValue,
-            isSliderActive: $isSliderActive,
+            value: $barValue,
+            isSliderActive: $isBarSliderActive,
+            accentColor: $barAccentColor,
+            isSliderDragging: $isBarSliderDragging,
             action: {
                 controller.showPreset(.home)
             }
         )
+        .background {
+            PlayerBarBridge(
+                value: $barValue,
+                isSliderActive: $isBarSliderActive,
+                accentColor: $barAccentColor,
+                isSliderDragging: $isBarSliderDragging
+            )
+        }
+        .onHover{ hover in
+            withAnimation (.custsmooth) {
+                onBarHover = hover
+            }
+        }
     }
     
     

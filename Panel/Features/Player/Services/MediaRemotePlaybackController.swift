@@ -22,12 +22,7 @@ actor MediaRemotePlaybackController: SystemPlaybackControlling {
         let commandProcess = Process()
         let standardError = Pipe()
         commandProcess.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        commandProcess.arguments = [
-            resources.scriptURL.path,
-            resources.frameworkURL.path,
-            "send",
-            String(command.rawValue),
-        ]
+        commandProcess.arguments = resources.playbackArguments(for: command)
         commandProcess.standardOutput = FileHandle.nullDevice
         commandProcess.standardError = standardError
         commandProcess.qualityOfService = .userInitiated

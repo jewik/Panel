@@ -59,6 +59,13 @@ final class SnapshotNormalizerTests: XCTestCase {
         ))
     }
 
+    func testNormalizesActualHelperIdleEnvelope() throws {
+        var normalizer = SnapshotNormalizer()
+        let envelope = try decode(#"{"type":"data","diff":false,"payload":{}}"#)
+
+        XCTAssertEqual(try normalizer.normalize(envelope), .idle)
+    }
+
     private func decode(_ json: String) throws -> AdapterEnvelope {
         try JSONDecoder().decode(AdapterEnvelope.self, from: Data(json.utf8))
     }

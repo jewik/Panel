@@ -12,6 +12,7 @@ nonisolated final class PreviewNowPlayingProvider: SystemNowPlayingProviding, @u
 
     nonisolated func updates() -> AsyncStream<SystemNowPlayingEvent> { stream }
     func current() async -> SystemNowPlayingState { initialState }
+    func connection() async -> SystemNowPlayingConnectionState { .connected }
     func start() async {}
     func retry() async {}
     func stop() async {}

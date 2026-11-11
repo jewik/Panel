@@ -53,6 +53,36 @@ nonisolated struct AdapterResources: Sendable {
             )
         }
     }
+
+    func invocationArguments(for commandArguments: [String]) -> [String] {
+        [scriptURL.path, frameworkURL.path] + commandArguments
+    }
+
+    func streamArguments(debounceMilliseconds: Int = 50) -> [String] {
+        invocationArguments(for: [
+            "stream",
+            "--no-diff",
+            "--debounce=\(debounceMilliseconds)",
+            "--micros",
+            "--allow-missing-title",
+        ])
+    }
+
+    func playbackArguments(for command: PlaybackCommand) -> [String] {
+        switch command {
+        case .togglePlayPause:
+            return invocationArguments(for: ["send", "2"])
+        case .nextTrack:
+            return invocationArguments(for: ["send", "4"])
+        case .previousTrack:
+            return invocationArguments(for: ["send", "5"])
+        case .seek(let position):
+            let maximumPosition = Double(Int64.max) / 1_000_000
+            let safePosition = min(max(0, position), maximumPosition)
+            let microseconds = Int64((safePosition * 1_000_000).rounded())
+            return invocationArguments(for: ["seek", String(microseconds)])
+        }
+    }
 }
 
 nonisolated private enum MachOArchitectureVerifier {

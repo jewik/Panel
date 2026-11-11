@@ -3,6 +3,7 @@ import Foundation
 nonisolated protocol SystemNowPlayingProviding: Sendable {
     nonisolated func updates() -> AsyncStream<SystemNowPlayingEvent>
     func current() async -> SystemNowPlayingState
+    func connection() async -> SystemNowPlayingConnectionState
     func start() async
     func retry() async
     func stop() async

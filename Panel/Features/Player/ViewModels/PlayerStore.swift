@@ -1,3 +1,4 @@
+import SwiftUI
 import Foundation
 import Observation
 import os
@@ -6,6 +7,7 @@ import os
 @Observable
 final class PlayerStore {
     private(set) var state: SystemNowPlayingState
+    private(set) var connectionState: SystemNowPlayingConnectionState = .stopped
     private(set) var isPerformingPlaybackCommand = false
     private(set) var playbackCommandError: String?
 
@@ -20,9 +22,14 @@ final class PlayerStore {
         }
     }
 
+    var isNowPlaying: Bool {
+        presentedSnapshot?.isPlaying == true
+    }
+
     var isReconnecting: Bool {
-        guard lastActiveSnapshot != nil,
-              case .unavailable(let failure) = state else { return false }
+        guard lastActiveSnapshot != nil else { return false }
+        if connectionState == .reconnecting { return true }
+        guard case .unavailable(let failure) = state else { return false }
         return failure.isRetryableConnectionFailure
     }
 
@@ -57,8 +64,10 @@ final class PlayerStore {
 
         monitoringTask = Task { [weak self, provider] in
             let currentState = await provider.current()
+            let currentConnection = await provider.connection()
             guard let self, !Task.isCancelled else { return }
             self.receive(.stateChanged(currentState))
+            self.receive(.connectionChanged(currentConnection))
 
             for await event in provider.updates() {
                 guard !Task.isCancelled else { return }
@@ -75,6 +84,7 @@ final class PlayerStore {
         playbackCommandTask?.cancel()
         playbackCommandTask = nil
         isPerformingPlaybackCommand = false
+        connectionState = .stopped
     }
 
     func retry() {
@@ -89,6 +99,18 @@ final class PlayerStore {
     func togglePlayback() { perform(.togglePlayPause) }
     func playPrevious() { perform(.previousTrack) }
     func playNext() { perform(.nextTrack) }
+
+    func seek(toProgress progress: Double) {
+        guard let snapshot = presentedSnapshot,
+              snapshot.isPlaying,
+              let duration = snapshot.duration,
+              duration.isFinite,
+              duration > 0,
+              progress.isFinite else { return }
+
+        let clampedProgress = min(max(0, progress), 1)
+        perform(.seek(to: duration * clampedProgress))
+    }
 
     private func perform(_ command: PlaybackCommand) {
         guard !isPerformingPlaybackCommand else { return }
@@ -118,6 +140,9 @@ final class PlayerStore {
         switch event {
         case .diagnostic(let diagnostic):
             log(diagnostic)
+
+        case .connectionChanged(let connectionState):
+            self.connectionState = connectionState
 
         case .stateChanged(let newState):
             rawState = newState

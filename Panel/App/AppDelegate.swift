@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
+        overlayPanel?.orderOut(nil)
         skyLightSpace.stop()
         Log.general.info("Application will terminate.")
     }
@@ -74,8 +75,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         overlayPanel = panel
         
-        panel.orderFrontRegardless()
         skyLightSpace.add(panel)
+        panel.orderFrontRegardless()
     }
     
     private func observeScreenChanges() {

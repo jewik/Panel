@@ -10,31 +10,25 @@ import os
 final class SkyLightSpace {
     static let shared = SkyLightSpace()
 
-    private typealias ConnectionID = Int32
-    private typealias SpaceID = Int32
-    private typealias WindowID = Int32
+    private typealias ConnectionID = UInt32
+    private typealias SpaceID = UInt64
+    private typealias WindowID = Int
 
     private typealias MainConnectionFunction = @convention(c) () -> ConnectionID
     private typealias CreateSpaceFunction = @convention(c) (
         ConnectionID,
         Int32,
-        Int32
+        CFDictionary?
     ) -> SpaceID
-    private typealias SpaceLevelFunction = @convention(c) (
-        ConnectionID,
-        SpaceID,
-        Int32
-    ) -> Int32
     private typealias SpacesFunction = @convention(c) (
         ConnectionID,
         CFArray
-    ) -> Int32
-    private typealias MoveWindowsFunction = @convention(c) (
+    ) -> Void
+    private typealias WindowsFunction = @convention(c) (
         ConnectionID,
-        SpaceID,
         CFArray,
-        Int32
-    ) -> Int32
+        CFArray
+    ) -> Void
     private typealias DestroySpaceFunction = @convention(c) (
         ConnectionID,
         SpaceID
@@ -43,10 +37,10 @@ final class SkyLightSpace {
     private struct API {
         let connection: ConnectionID
         let createSpace: CreateSpaceFunction
-        let setSpaceLevel: SpaceLevelFunction
         let showSpaces: SpacesFunction
         let hideSpaces: SpacesFunction
-        let moveWindows: MoveWindowsFunction
+        let addWindows: WindowsFunction
+        let removeWindows: WindowsFunction
         let destroySpace: DestroySpaceFunction
     }
 
@@ -65,11 +59,11 @@ final class SkyLightSpace {
             return false
         }
 
-        guard window.windowNumber > 0,
-              let windowID = WindowID(exactly: window.windowNumber) else {
+        guard window.windowNumber > 0 else {
             Log.service.error("SkyLight cannot attach a window without a valid number.")
             return false
         }
+        let windowID = window.windowNumber
 
         guard !windowIDs.contains(windowID) else {
             return true
@@ -85,19 +79,11 @@ final class SkyLightSpace {
             return false
         }
 
-        let result = api.moveWindows(
+        api.addWindows(
             api.connection,
-            spaceID,
             [NSNumber(value: windowID)] as CFArray,
-            0x7
+            [NSNumber(value: spaceID)] as CFArray
         )
-
-        guard result == 0 else {
-            Log.service.error(
-                "SkyLight failed to move window to stationary Space: \(result)"
-            )
-            return false
-        }
 
         windowIDs.insert(windowID)
 
@@ -115,13 +101,15 @@ final class SkyLightSpace {
         }
 
         let spaces = [NSNumber(value: spaceID)] as CFArray
-        let hideResult = api.hideSpaces(api.connection, spaces)
-        if hideResult != 0 {
-            Log.service.error(
-                "SkyLight failed to hide stationary Space: \(hideResult)"
+        if !windowIDs.isEmpty {
+            api.removeWindows(
+                api.connection,
+                windowIDs.map { NSNumber(value: $0) } as CFArray,
+                spaces
             )
         }
 
+        api.hideSpaces(api.connection, spaces)
         api.destroySpace(api.connection, spaceID)
 
         self.spaceID = nil
@@ -134,32 +122,16 @@ final class SkyLightSpace {
         }
 
         // The creation flag must be 1 for an application-level overlay Space.
-        let newSpaceID = api.createSpace(api.connection, 1, 0)
+        let newSpaceID = api.createSpace(api.connection, 1, nil)
         guard newSpaceID != 0 else {
             Log.service.error("SkyLight failed to create a stationary Space.")
             return nil
         }
 
-        let levelResult = api.setSpaceLevel(api.connection, newSpaceID, 0)
-        guard levelResult == 0 else {
-            api.destroySpace(api.connection, newSpaceID)
-            Log.service.error(
-                "SkyLight failed to set stationary Space level: \(levelResult)"
-            )
-            return nil
-        }
-
-        let showResult = api.showSpaces(
+        api.showSpaces(
             api.connection,
             [NSNumber(value: newSpaceID)] as CFArray
         )
-        guard showResult == 0 else {
-            api.destroySpace(api.connection, newSpaceID)
-            Log.service.error(
-                "SkyLight failed to show stationary Space: \(showResult)"
-            )
-            return nil
-        }
 
         spaceID = newSpaceID
         Log.service.info("SkyLight created stationary Space \(newSpaceID).")
@@ -171,16 +143,13 @@ final class SkyLightSpace {
             "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight",
             RTLD_NOW | RTLD_LOCAL
         ),
-        let mainConnectionSymbol = dlsym(handle, "SLSMainConnectionID"),
-        let createSpaceSymbol = dlsym(handle, "SLSSpaceCreate"),
-        let setSpaceLevelSymbol = dlsym(handle, "SLSSpaceSetAbsoluteLevel"),
-        let showSpacesSymbol = dlsym(handle, "SLSShowSpaces"),
-        let hideSpacesSymbol = dlsym(handle, "SLSHideSpaces"),
-        let moveWindowsSymbol = dlsym(
-            handle,
-            "SLSSpaceAddWindowsAndRemoveFromSpaces"
-        ),
-        let destroySpaceSymbol = dlsym(handle, "SLSSpaceDestroy") else {
+        let mainConnectionSymbol = dlsym(handle, "CGSMainConnectionID"),
+        let createSpaceSymbol = dlsym(handle, "CGSSpaceCreate"),
+        let showSpacesSymbol = dlsym(handle, "CGSShowSpaces"),
+        let hideSpacesSymbol = dlsym(handle, "CGSHideSpaces"),
+        let addWindowsSymbol = dlsym(handle, "CGSAddWindowsToSpaces"),
+        let removeWindowsSymbol = dlsym(handle, "CGSRemoveWindowsFromSpaces"),
+        let destroySpaceSymbol = dlsym(handle, "CGSSpaceDestroy") else {
             return nil
         }
 
@@ -199,10 +168,6 @@ final class SkyLightSpace {
                 createSpaceSymbol,
                 to: CreateSpaceFunction.self
             ),
-            setSpaceLevel: unsafeBitCast(
-                setSpaceLevelSymbol,
-                to: SpaceLevelFunction.self
-            ),
             showSpaces: unsafeBitCast(
                 showSpacesSymbol,
                 to: SpacesFunction.self
@@ -211,9 +176,13 @@ final class SkyLightSpace {
                 hideSpacesSymbol,
                 to: SpacesFunction.self
             ),
-            moveWindows: unsafeBitCast(
-                moveWindowsSymbol,
-                to: MoveWindowsFunction.self
+            addWindows: unsafeBitCast(
+                addWindowsSymbol,
+                to: WindowsFunction.self
+            ),
+            removeWindows: unsafeBitCast(
+                removeWindowsSymbol,
+                to: WindowsFunction.self
             ),
             destroySpace: unsafeBitCast(
                 destroySpaceSymbol,

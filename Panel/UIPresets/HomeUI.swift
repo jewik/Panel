@@ -14,6 +14,7 @@ struct HomeUI: View {
             PlayerUI()
             
             Divider()
+                .background(Color.custsecondary)
                 .padding(.vertical, 10)
                 .frame(height: 100)
 
