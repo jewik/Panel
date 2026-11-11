@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 actor SystemNowPlayingProvider: SystemNowPlayingProviding {
@@ -7,17 +8,28 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
     private let injectedResources: AdapterResources?
 
     private var state: SystemNowPlayingState = .idle
+    private var connectionState: SystemNowPlayingConnectionState = .stopped
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
+    private var stdoutReaderTask: Task<Void, Never>?
+    private var stderrReaderTask: Task<Void, Never>?
+    private var stdoutDataContinuation: AsyncStream<Data>.Continuation?
+    private var stderrDataContinuation: AsyncStream<Data>.Continuation?
+    private var launchTimeoutTask: Task<Void, Never>?
+    private var stabilityResetTask: Task<Void, Never>?
     private var lineDecoder = JSONLineDecoder()
     private var normalizer = SnapshotNormalizer()
     private var restartTask: Task<Void, Never>?
+    private var restartPolicy = HelperRestartPolicy()
     private var launchIdentifier: UUID?
     private var explicitlyStopped = true
-    private var consecutiveRestarts = 0
     private var recentStandardError = Data()
     private var wakeObserver: NSObjectProtocol?
+
+    private let firstSnapshotTimeout: Duration = .seconds(5)
+    private let gracefulStopTimeout: Duration = .seconds(2)
+    private let restartStabilityInterval: Duration = .seconds(30)
 
     init(resources: AdapterResources? = nil) {
         let pair = AsyncStream<SystemNowPlayingEvent>.makeStream(
@@ -36,39 +48,64 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
         state
     }
 
+    func connection() -> SystemNowPlayingConnectionState {
+        connectionState
+    }
+
     func start() {
-        guard process == nil else { return }
+        guard explicitlyStopped else { return }
+
         explicitlyStopped = false
+        restartPolicy.reset()
         restartTask?.cancel()
         restartTask = nil
         installWakeObserverIfNeeded()
+        publishConnection(.starting)
         launchHelper()
     }
 
-    func retry() {
+    func retry() async {
         restartTask?.cancel()
         restartTask = nil
-        stopProcess(markExplicit: false)
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
+
+        let stoppedProcess = stopProcess(markExplicit: false)
+        await waitForTermination(of: stoppedProcess)
+
         explicitlyStopped = false
-        consecutiveRestarts = 0
+        restartPolicy.reset()
         normalizer.reset()
         lineDecoder.reset()
+        publishConnection(.starting)
         launchHelper()
     }
 
-    func stop() {
+    func stop() async {
         explicitlyStopped = true
         restartTask?.cancel()
         restartTask = nil
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
+
         let stoppedProcess = stopProcess(markExplicit: true)
-        stoppedProcess?.waitUntilExit()
+        await waitForTermination(of: stoppedProcess)
+
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
         }
+
+        lineDecoder.reset()
+        normalizer.reset()
+        restartPolicy.reset()
+        publish(.idle)
+        publishConnection(.stopped)
     }
 
     private func launchHelper() {
+        guard !explicitlyStopped, process == nil else { return }
+
         do {
             guard FileManager.default.isExecutableFile(atPath: "/usr/bin/perl") else {
                 throw NowPlayingFailure(
@@ -77,6 +114,7 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
                     recoverySuggestion: nil
                 )
             }
+
             let resources = try injectedResources ?? AdapterResources.bundled()
             try resources.validate()
 
@@ -86,39 +124,10 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             let identifier = UUID()
 
             process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-            process.arguments = [
-                resources.scriptURL.path,
-                resources.frameworkURL.path,
-                "stream",
-                "--no-diff",
-                "--debounce=50",
-                "--micros",
-                "--allow-missing-title",
-            ]
+            process.arguments = resources.streamArguments()
             process.standardOutput = stdout
             process.standardError = stderr
             process.qualityOfService = .userInitiated
-
-            stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
-                Task {
-                    await self?.consumeStandardOutput(
-                        data,
-                        launchIdentifier: identifier
-                    )
-                }
-            }
-            stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
-                Task {
-                    await self?.consumeStandardError(
-                        data,
-                        launchIdentifier: identifier
-                    )
-                }
-            }
             process.terminationHandler = { [weak self] process in
                 let status = process.terminationStatus
                 let reason = process.terminationReason
@@ -140,15 +149,18 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             normalizer.reset()
 
             try process.run()
+            startReaderTasks(
+                stdout: stdout.fileHandleForReading,
+                stderr: stderr.fileHandleForReading,
+                launchIdentifier: identifier
+            )
+            scheduleFirstSnapshotTimeout(for: identifier)
             emitDiagnostic(
                 .info,
                 "Now Playing helper started (PID \(process.processIdentifier))."
             )
         } catch {
-            process = nil
-            stdoutPipe = nil
-            stderrPipe = nil
-            launchIdentifier = nil
+            clearProcessReferences()
             let failure = (error as? NowPlayingFailure) ?? NowPlayingFailure(
                 kind: .launchFailed,
                 message: error.localizedDescription,
@@ -156,14 +168,72 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             )
             publish(.unavailable(failure))
             emitDiagnostic(.error, failure.message)
+
             if failure.isRetryableConnectionFailure {
                 scheduleRestart()
+            } else {
+                publishConnection(.failed)
             }
         }
     }
 
-    private func consumeStandardOutput(_ data: Data, launchIdentifier: UUID) {
+    private func startReaderTasks(
+        stdout: FileHandle,
+        stderr: FileHandle,
+        launchIdentifier: UUID
+    ) {
+        let stdoutPair = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        let stderrPair = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        stdoutDataContinuation = stdoutPair.continuation
+        stderrDataContinuation = stderrPair.continuation
+
+        // A synchronous read(upToCount:) on a pipe can wait for the requested
+        // byte count or EOF. availableData is safe here because the handler is
+        // invoked only after the descriptor becomes readable.
+        stdout.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                stdoutPair.continuation.finish()
+            } else {
+                stdoutPair.continuation.yield(data)
+            }
+        }
+        stderr.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                stderrPair.continuation.finish()
+            } else {
+                stderrPair.continuation.yield(data)
+            }
+        }
+
+        stdoutReaderTask = Task { [weak self] in
+            for await data in stdoutPair.stream {
+                guard !Task.isCancelled else { return }
+                await self?.consumeStandardOutput(
+                    data,
+                    launchIdentifier: launchIdentifier
+                )
+            }
+        }
+
+        stderrReaderTask = Task { [weak self] in
+            for await data in stderrPair.stream {
+                guard !Task.isCancelled else { return }
+                await self?.consumeStandardError(
+                    data,
+                    launchIdentifier: launchIdentifier
+                )
+            }
+        }
+    }
+
+    private func consumeStandardOutput(
+        _ data: Data,
+        launchIdentifier: UUID
+    ) {
         guard self.launchIdentifier == launchIdentifier else { return }
+
         do {
             let lines = try lineDecoder.append(data)
             for line in lines {
@@ -174,9 +244,10 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
                         recoverySuggestion: "Retry or rebuild the adapter."
                     )
                 }
+
                 let envelope = try JSONDecoder().decode(AdapterEnvelope.self, from: line)
+                markHelperResponsive(launchIdentifier: launchIdentifier)
                 if let nextState = try normalizer.normalize(envelope) {
-                    consecutiveRestarts = 0
                     publish(nextState)
                 }
             }
@@ -188,18 +259,69 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
             )
             publish(.unavailable(failure))
             emitDiagnostic(.error, "Protocol failure: \(failure.message)")
-            stopProcess(markExplicit: false)
-            scheduleRestart()
+            stopAndScheduleRestart()
         }
     }
 
-    private func consumeStandardError(_ data: Data, launchIdentifier: UUID) {
+    private func consumeStandardError(
+        _ data: Data,
+        launchIdentifier: UUID
+    ) {
         guard self.launchIdentifier == launchIdentifier else { return }
+
         recentStandardError.append(data)
         let limit = 16 * 1_024
         if recentStandardError.count > limit {
             recentStandardError.removeFirst(recentStandardError.count - limit)
         }
+    }
+
+    private func markHelperResponsive(launchIdentifier: UUID) {
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
+        publishConnection(.connected)
+
+        guard stabilityResetTask == nil else { return }
+        stabilityResetTask = Task { [weak self] in
+            try? await Task.sleep(
+                for: self?.restartStabilityInterval ?? .seconds(30)
+            )
+            guard !Task.isCancelled else { return }
+            await self?.markHelperStable(launchIdentifier: launchIdentifier)
+        }
+    }
+
+    private func markHelperStable(launchIdentifier: UUID) {
+        guard self.launchIdentifier == launchIdentifier,
+              process?.isRunning == true else { return }
+        stabilityResetTask = nil
+        restartPolicy.reset()
+    }
+
+    private func scheduleFirstSnapshotTimeout(for launchIdentifier: UUID) {
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: self?.firstSnapshotTimeout ?? .seconds(5))
+            guard !Task.isCancelled else { return }
+            await self?.handleFirstSnapshotTimeout(launchIdentifier: launchIdentifier)
+        }
+    }
+
+    private func handleFirstSnapshotTimeout(launchIdentifier: UUID) async {
+        guard self.launchIdentifier == launchIdentifier else { return }
+        launchTimeoutTask = nil
+
+        let failure = NowPlayingFailure(
+            kind: .helperUnresponsive,
+            message: "The Now Playing helper did not produce an initial snapshot.",
+            recoverySuggestion: "Retry. MediaRemote may not have resumed correctly."
+        )
+        publish(.unavailable(failure))
+        emitDiagnostic(.error, failure.message)
+
+        let stoppedProcess = stopProcess(markExplicit: false)
+        await waitForTermination(of: stoppedProcess)
+        scheduleRestart()
     }
 
     private func helperTerminated(
@@ -208,46 +330,81 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
         launchIdentifier: UUID
     ) {
         guard self.launchIdentifier == launchIdentifier else { return }
-        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        stderrPipe?.fileHandleForReading.readabilityHandler = nil
-        process = nil
-        stdoutPipe = nil
-        stderrPipe = nil
-        self.launchIdentifier = nil
 
-        if explicitlyStopped { return }
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
+        clearProcessReferences()
+
+        guard !explicitlyStopped else { return }
 
         let details = String(data: recentStandardError, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if status != 0 || reason == .uncaughtSignal {
+
+        switch HelperLifecyclePolicy.action(status: status, reason: reason) {
+        case .fail:
             let message = details?.isEmpty == false
                 ? "Helper exited with status \(status): \(details!)"
-                : "Helper exited unexpectedly with status \(status)."
-            publish(.unavailable(NowPlayingFailure(
-                kind: .helperExited,
+                : "Helper reported a fatal error with status \(status)."
+            let failure = NowPlayingFailure(
+                kind: .helperFatal,
                 message: message,
-                recoverySuggestion: "Retry. This macOS release may be incompatible."
-            )))
+                recoverySuggestion: "Retry manually. This macOS release may be incompatible."
+            )
+            publish(.unavailable(failure))
+            publishConnection(.failed)
             emitDiagnostic(.error, message)
-            scheduleRestart()
-            return
-        }
 
-        scheduleRestart()
+        case .restart:
+            emitDiagnostic(
+                .warning,
+                "Now Playing helper stopped unexpectedly (status \(status)); scheduling restart."
+            )
+            scheduleRestart()
+        }
     }
 
     private func scheduleRestart() {
         guard !explicitlyStopped, process == nil else { return }
-        consecutiveRestarts += 1
-        let exponent = min(consecutiveRestarts - 1, 5)
-        let delay = min(pow(2.0, Double(exponent)) * 0.5, 15)
-        emitDiagnostic(.warning, "Helper stopped; restarting in \(delay) seconds.")
+
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
         restartTask?.cancel()
+
+        guard let delay = restartPolicy.nextDelay() else {
+            let failure = NowPlayingFailure(
+                kind: .restartLimitReached,
+                message: "The Now Playing helper repeatedly stopped and will not restart automatically.",
+                recoverySuggestion: "Retry manually after checking macOS compatibility."
+            )
+            publish(.unavailable(failure))
+            publishConnection(.failed)
+            emitDiagnostic(.error, failure.message)
+            restartTask = nil
+            return
+        }
+
+        publishConnection(.reconnecting)
+        emitDiagnostic(.warning, "Helper stopped; restarting in \(delay) seconds.")
         restartTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
             await self?.restartAfterDelay()
         }
+    }
+
+    private func stopAndScheduleRestart() {
+        restartTask?.cancel()
+        let stoppedProcess = stopProcess(markExplicit: false)
+        restartTask = Task { [weak self] in
+            await self?.finishRecoverableStop(stoppedProcess)
+        }
+    }
+
+    private func finishRecoverableStop(_ stoppedProcess: Process?) async {
+        await waitForTermination(of: stoppedProcess)
+        guard !Task.isCancelled else { return }
+        restartTask = nil
+        scheduleRestart()
     }
 
     private func restartAfterDelay() {
@@ -261,24 +418,75 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
         if markExplicit {
             explicitlyStopped = true
         }
+
         let oldProcess = process
-        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        stderrPipe?.fileHandleForReading.readabilityHandler = nil
         oldProcess?.terminationHandler = nil
-        process = nil
-        stdoutPipe = nil
-        stderrPipe = nil
-        launchIdentifier = nil
+
+        launchTimeoutTask?.cancel()
+        launchTimeoutTask = nil
+        clearProcessReferences()
+
         if oldProcess?.isRunning == true {
             oldProcess?.terminate()
         }
         return oldProcess
     }
 
+    private func clearProcessReferences() {
+        stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        stdoutDataContinuation?.finish()
+        stderrDataContinuation?.finish()
+        stdoutReaderTask?.cancel()
+        stderrReaderTask?.cancel()
+        stabilityResetTask?.cancel()
+        stdoutDataContinuation = nil
+        stderrDataContinuation = nil
+        stdoutReaderTask = nil
+        stderrReaderTask = nil
+        stabilityResetTask = nil
+
+        try? stdoutPipe?.fileHandleForReading.close()
+        try? stderrPipe?.fileHandleForReading.close()
+
+        process = nil
+        stdoutPipe = nil
+        stderrPipe = nil
+        launchIdentifier = nil
+        lineDecoder.reset()
+    }
+
+    private func waitForTermination(of process: Process?) async {
+        guard let process, process.isRunning else { return }
+
+        let pollInterval: Duration = .milliseconds(50)
+        let pollCount = 40
+        for _ in 0..<pollCount {
+            if !process.isRunning { return }
+            try? await Task.sleep(for: pollInterval)
+        }
+
+        guard process.isRunning else { return }
+        let processIdentifier = process.processIdentifier
+        if processIdentifier > 0 {
+            Darwin.kill(processIdentifier, SIGKILL)
+            emitDiagnostic(
+                .warning,
+                "Helper did not stop within \(gracefulStopTimeout); sent SIGKILL."
+            )
+        }
+    }
+
     private func publish(_ newState: SystemNowPlayingState) {
         guard newState != state else { return }
         state = newState
         continuation.yield(.stateChanged(newState))
+    }
+
+    private func publishConnection(_ newState: SystemNowPlayingConnectionState) {
+        guard newState != connectionState else { return }
+        connectionState = newState
+        continuation.yield(.connectionChanged(newState))
     }
 
     private func emitDiagnostic(
@@ -302,11 +510,16 @@ actor SystemNowPlayingProvider: SystemNowPlayingProviding {
         }
     }
 
-    private func handleWake() {
+    private func handleWake() async {
         guard !explicitlyStopped else { return }
-        if process?.isRunning != true {
-            stopProcess(markExplicit: false)
-            launchHelper()
-        }
+
+        restartTask?.cancel()
+        restartTask = nil
+        restartPolicy.reset()
+        publishConnection(.starting)
+
+        let stoppedProcess = stopProcess(markExplicit: false)
+        await waitForTermination(of: stoppedProcess)
+        launchHelper()
     }
 }

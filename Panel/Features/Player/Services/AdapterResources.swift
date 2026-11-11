@@ -53,6 +53,24 @@ nonisolated struct AdapterResources: Sendable {
             )
         }
     }
+
+    func invocationArguments(for commandArguments: [String]) -> [String] {
+        [scriptURL.path, frameworkURL.path] + commandArguments
+    }
+
+    func streamArguments(debounceMilliseconds: Int = 50) -> [String] {
+        invocationArguments(for: [
+            "stream",
+            "--no-diff",
+            "--debounce=\(debounceMilliseconds)",
+            "--micros",
+            "--allow-missing-title",
+        ])
+    }
+
+    func playbackArguments(for command: PlaybackCommand) -> [String] {
+        invocationArguments(for: ["send", String(command.rawValue)])
+    }
 }
 
 nonisolated private enum MachOArchitectureVerifier {

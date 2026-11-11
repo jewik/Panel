@@ -25,7 +25,7 @@ struct PlayerCollapsedView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(8)
-                .frame(width: 210, height: 46, alignment: .topLeading)
+                .frame(width: 216, height: 46, alignment: .topLeading)
                 .transition(.collapseExpandTransition)
             }
         }
@@ -58,7 +58,7 @@ struct PlayerCollapsedView: View {
         PanelShape()
             .rotation(.degrees(180))
             .fill(.black)
-            .frame(width: 210, height: 46)
+            .frame(width: 216, height: 46)
         PlayerCollapsedView()
             .background(.red.opacity(0.2))
     }

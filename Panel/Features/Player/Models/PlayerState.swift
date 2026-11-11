@@ -6,8 +6,17 @@ nonisolated enum SystemNowPlayingState: Equatable, Sendable {
     case unavailable(NowPlayingFailure)
 }
 
+nonisolated enum SystemNowPlayingConnectionState: Equatable, Sendable {
+    case stopped
+    case starting
+    case connected
+    case reconnecting
+    case failed
+}
+
 nonisolated enum SystemNowPlayingEvent: Equatable, Sendable {
     case stateChanged(SystemNowPlayingState)
+    case connectionChanged(SystemNowPlayingConnectionState)
     case diagnostic(NowPlayingDiagnostic)
 }
 
@@ -26,6 +35,9 @@ nonisolated struct NowPlayingFailure: Error, Equatable, Sendable {
         case commandFailed
         case malformedProtocol
         case helperExited
+        case helperFatal
+        case helperUnresponsive
+        case restartLimitReached
     }
 
     let kind: Kind
@@ -34,9 +46,10 @@ nonisolated struct NowPlayingFailure: Error, Equatable, Sendable {
 
     var isRetryableConnectionFailure: Bool {
         switch kind {
-        case .launchFailed, .malformedProtocol, .helperExited:
+        case .launchFailed, .malformedProtocol, .helperExited, .helperUnresponsive:
             true
-        case .unsupportedSystem, .missingResource, .incompatibleArchitecture, .commandFailed:
+        case .unsupportedSystem, .missingResource, .incompatibleArchitecture,
+             .commandFailed, .helperFatal, .restartLimitReached:
             false
         }
     }

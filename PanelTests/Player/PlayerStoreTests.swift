@@ -98,6 +98,24 @@ final class PlayerStoreTests: XCTestCase {
         store.stopMonitoring()
     }
 
+    func testConnectionStateShowsReconnectingWithoutDiscardingSnapshot() async {
+        let provider = PlayerProviderDouble(state: .active(.fixture))
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture)
+        )
+        store.startMonitoring()
+
+        await provider.emitConnection(.reconnecting)
+        await waitForStateChange()
+
+        XCTAssertEqual(store.connectionState, .reconnecting)
+        XCTAssertEqual(store.presentedSnapshot, .fixture)
+        XCTAssertTrue(store.isReconnecting)
+        store.stopMonitoring()
+    }
+
     func testPermanentFailureDoesNotKeepLastSnapshotVisible() async {
         let failure = NowPlayingFailure(
             kind: .missingResource,
@@ -134,6 +152,7 @@ private actor PlayerProviderDouble: SystemNowPlayingProviding {
     nonisolated let eventStream: AsyncStream<SystemNowPlayingEvent>
     nonisolated let continuation: AsyncStream<SystemNowPlayingEvent>.Continuation
     private var state: SystemNowPlayingState
+    private var connectionState: SystemNowPlayingConnectionState = .connected
 
     init(state: SystemNowPlayingState) {
         self.state = state
@@ -144,6 +163,7 @@ private actor PlayerProviderDouble: SystemNowPlayingProviding {
 
     nonisolated func updates() -> AsyncStream<SystemNowPlayingEvent> { eventStream }
     func current() -> SystemNowPlayingState { state }
+    func connection() -> SystemNowPlayingConnectionState { connectionState }
     func start() {}
     func retry() {}
     func stop() {}
@@ -151,6 +171,11 @@ private actor PlayerProviderDouble: SystemNowPlayingProviding {
     func emit(_ state: SystemNowPlayingState) {
         self.state = state
         continuation.yield(.stateChanged(state))
+    }
+
+    func emitConnection(_ state: SystemNowPlayingConnectionState) {
+        connectionState = state
+        continuation.yield(.connectionChanged(state))
     }
 }
 

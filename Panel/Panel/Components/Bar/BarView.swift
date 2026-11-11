@@ -13,6 +13,7 @@ struct BarView: View {
 
     @Binding var value: Double
     @Binding var isSliderActive: Bool
+    @Binding var accentColor: Color
     var action: () -> Void
     
     @State private var isHovered: Bool = false
@@ -20,9 +21,9 @@ struct BarView: View {
     // Храним значение, которое было у слайдера в момент нажатия мышью
     @State private var startValue: Double = 0.0
     
-    let backColor: Color = Color.white.opacity(0.12)
-    let defaultColor: Color = Color.custsecondary
-    let activeColor: Color = Color.white
+    var activeColor: Color { accentColor }
+    var defaultColor: Color { accentColor.opacity(0.5) }
+    var backgroundColor: Color { accentColor.opacity(0.2) }
     
     var body: some View {
         GeometryReader { geometry in
@@ -33,7 +34,7 @@ struct BarView: View {
             ZStack(alignment: .leading) {
                 // Трэк слайдера
                 Capsule()
-                    .fill(backColor)
+                    .fill(backgroundColor)
                 
                 // Заполняющая часть
                 Rectangle()
@@ -113,10 +114,12 @@ struct BarView: View {
     
     @Previewable @State var sliderBarValue: Double = 1
     @Previewable @State var isSliderActive: Bool = true
+    @Previewable @State var accentColor: Color = .white
 
     BarView(
         value: $sliderBarValue,
         isSliderActive: $isSliderActive,
+        accentColor: $accentColor,
         action: {}
     )
         .environment(AppContainer().controller)

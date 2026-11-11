@@ -13,7 +13,7 @@ struct RootView: View {
     
     @State private var sliderBarValue: Double = 1
     @State private var isSliderActive: Bool = false
-    
+    @State private var sliderColor: Color = .white
     @State private var onBarHover: Bool = false
     
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
@@ -99,9 +99,9 @@ struct RootView: View {
                     radiusRules: panelRadiusRules
                 )
                 
-                UnionPanelShape(radiusRules: panelRadiusRules)
-                    .rotation(.degrees(180))
-                    .fill(.black.opacity(0.5))
+                //                UnionPanelShape(radiusRules: panelRadiusRules)
+                //                    .rotation(.degrees(180))
+                //                    .fill(.black.opacity(0.1))
             } else {
                 UnionPanelShape(radiusRules: panelRadiusRules)
                     .rotation(.degrees(180))
@@ -131,7 +131,7 @@ struct RootView: View {
                 CollapsedUI(
                     onAttention: $onBarHover
                 )
-                    .transition(.collapseExpandTransition)
+                .transition(.collapseExpandTransition)
             case .home:
                 HomeUI()
                     .transition(.collapseExpandTransition)
@@ -165,7 +165,7 @@ struct RootView: View {
                     .shadow(color: !controller.checkPreset(.collapsed) ? .black : .clear, radius: 20)
                 
                 Capsule()
-                    .fill(.black.opacity(0.5))
+                    .fill(.black.opacity(0.2))
                 
             } else {
                 Capsule()
@@ -189,6 +189,7 @@ struct RootView: View {
         BarView(
             value: $sliderBarValue,
             isSliderActive: $isSliderActive,
+            accentColor: $sliderColor,
             action: {
                 controller.showPreset(.home)
             }
