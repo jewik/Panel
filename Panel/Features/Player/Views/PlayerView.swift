@@ -3,6 +3,8 @@ import SwiftUI
 
 struct PlayerView: View {
     @Environment(PlayerStore.self) private var store
+    @State private var textSynchronizationMarker =
+        PlayerAutoSlidingTextSynchronizationMarker()
 
     var body: some View {
         Group {
@@ -37,11 +39,17 @@ struct PlayerView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(snapshot.displayTitle)
+                    PlayerAutoSlidingText(
+                        snapshot.displayTitle,
+                        synchronizationMarker: textSynchronizationMarker
+                    )
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
-                    Text(snapshot.displaySubtitle ?? snapshot.source.displayName)
+                    PlayerAutoSlidingText(
+                        snapshot.displaySubtitle ?? snapshot.source.displayName,
+                        synchronizationMarker: textSynchronizationMarker
+                    )
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.custsecondary)
                         .lineLimit(1)

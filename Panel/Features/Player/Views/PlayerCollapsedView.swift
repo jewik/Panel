@@ -18,7 +18,7 @@ struct PlayerCollapsedView: View {
                     
                     artwork(snapshot.artworkData)
 
-                    Text(snapshot.displayTitle)
+                    PlayerAutoSlidingText(snapshot.displayTitle)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.custsecondary)
                         .lineLimit(1)
