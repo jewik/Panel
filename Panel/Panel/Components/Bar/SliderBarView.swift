@@ -7,10 +7,8 @@
 
 import SwiftUI
 
-struct BarView: View {
+struct SliderBarView: View {
     
-//    @Environment(PanelController.self) private var controller
-
     @Binding var value: Double
     @Binding var isSliderActive: Bool
     @Binding var accentColor: Color
@@ -84,27 +82,6 @@ struct BarView: View {
         .animation(.smooth(duration: 0.2), value: accentColor)
 
     }
-    
-    
-//    @State var isHovered: Bool = false
-//    
-//    init() {}
-//    
-//    var body: some View {
-//        ZStack(alignment: .bottom){
-//            Button(action: {
-//                controller.showPreset(.home)
-//            }){
-//                Capsule()
-//                    .fill(isHovered ? .white : .secondary)
-//                    .frame(width: 200, height: 5)
-//                    .padding([.horizontal, .top], isHovered ? 5 : 3)
-//            }
-//            .buttonStyle(.plain)
-//            .onHover{ isHovered = $0 }
-//        }
-//        .animation(.custsmooth, value: isHovered)
-//    }
 }
 
 #Preview {
@@ -114,7 +91,7 @@ struct BarView: View {
     @Previewable @State var accentColor: Color = .white
     @Previewable @State var isSliderDragging: Bool = false
 
-    BarView(
+    SliderBarView(
         value: $sliderBarValue,
         isSliderActive: $isSliderActive,
         accentColor: $accentColor,

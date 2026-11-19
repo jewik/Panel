@@ -37,8 +37,8 @@ struct PlayerView: View {
                     }
                 }
 
-            VStack(alignment: .leading, spacing: 7) {
-                VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
                     PlayerAutoSlidingText(
                         snapshot.displayTitle,
                         synchronizationMarker: textSynchronizationMarker
@@ -55,6 +55,8 @@ struct PlayerView: View {
                         .lineLimit(1)
                 }
                 .frame(width: 180, alignment: .leading)
+
+                PlayerPlaybackView()
 
                 playbackControls(isPlaying: snapshot.isPlaying)
             }
@@ -166,7 +168,7 @@ struct PlayerView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
                 .foregroundStyle(.white)
         }

@@ -60,6 +60,21 @@ final class PlayerStoreTests: XCTestCase {
         XCTAssertEqual(commands, [.seek(to: 60)])
     }
 
+    func testSeekWorksWhilePlaybackIsPaused() async {
+        let controller = PlaybackControllerDouble()
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .active(.pausedFixture)),
+            playbackController: controller,
+            initialState: .active(.pausedFixture)
+        )
+
+        store.seek(toProgress: 0.25)
+        await waitForCommandToFinish(store)
+
+        let commands = await controller.recordedCommands()
+        XCTAssertEqual(commands, [.seek(to: 30)])
+    }
+
     func testIdleTransitionIsDelayed() async {
         let provider = PlayerProviderDouble(state: .active(.fixture))
         let store = PlayerStore(

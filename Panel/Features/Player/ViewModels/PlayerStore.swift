@@ -102,7 +102,6 @@ final class PlayerStore {
 
     func seek(toProgress progress: Double) {
         guard let snapshot = presentedSnapshot,
-              snapshot.isPlaying,
               let duration = snapshot.duration,
               duration.isFinite,
               duration > 0,

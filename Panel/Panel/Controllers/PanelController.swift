@@ -18,21 +18,14 @@ final class PanelController {
     private let panelState: PanelState
     
     
-    init(
-        panelState: PanelState
-    ) {
+    init(panelState: PanelState) {
         self.panelState = panelState
-        
     }
-//    private func setPanelMode(_ mode: PanelMode) {
-//        withAnimation (.custsmooth) {
-//            panelState.panelMode = mode
-//        }
-//    }
     
     private func setPreset(_ preset: PanelPreset) {
         withAnimation (.custsmooth) {
             panelState.preset = preset
+            Log.general.debug("Preset changed to: \(preset)")
         }
     }
     
@@ -66,7 +59,7 @@ final class PanelController {
     func togglePinned(){
         if autoPinActive {
             panelState.isAutoPinSuppressed = true
-            Log.ui.debug("Settings auto-pin suppressed by user")
+            Log.general.debug("Settings auto-pin suppressed by user")
         } else {
             panelState.isPanelPinned.toggle()
         }
