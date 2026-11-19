@@ -16,9 +16,17 @@ struct PlayerCollapsedView: View {
             if store.isNowPlaying, let snapshot = store.presentedSnapshot {
                 HStack(alignment: .center, spacing: 10) {
                     
-                    artwork(snapshot.artworkData)
+                    Button(action: store.openPlaybackSource) {
+                        artwork(snapshot.artworkData)
+                            .playerArtworkFlip(
+                                identity: PlayerArtworkIdentity(data: snapshot.artworkData)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open \(snapshot.source.displayName)")
+                    .accessibilityLabel("Open \(snapshot.source.displayName)")
 
-                    Text(snapshot.displayTitle)
+                    PlayerAutoSlidingText(snapshot.displayTitle)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.custsecondary)
                         .lineLimit(1)

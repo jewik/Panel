@@ -69,6 +69,34 @@ nonisolated struct NowPlayingSnapshot: Equatable, Sendable, Identifiable {
         return duration.map { min(value, $0) } ?? value
     }
 
+    func settingElapsedTime(
+        _ newElapsedTime: TimeInterval,
+        refreshedAt date: Date = .now
+    ) -> Self {
+        let upperBound = duration.flatMap { value in
+            value.isFinite && value > 0 ? value : nil
+        }
+        let elapsedTime = upperBound.map {
+            min(max(newElapsedTime, 0), $0)
+        } ?? max(newElapsedTime, 0)
+
+        return Self(
+            source: source,
+            isPlaying: isPlaying,
+            title: title,
+            artist: artist,
+            album: album,
+            duration: duration,
+            elapsedTime: elapsedTime,
+            refreshedAt: date,
+            playbackRate: playbackRate,
+            artworkData: artworkData,
+            artworkMIMEType: artworkMIMEType,
+            mediaType: mediaType,
+            contentItemIdentifier: contentItemIdentifier
+        )
+    }
+
     func isSameTrack(as other: NowPlayingSnapshot) -> Bool {
         guard source.preferredIdentifier == other.source.preferredIdentifier else {
             return false
@@ -80,5 +108,30 @@ nonisolated struct NowPlayingSnapshot: Equatable, Sendable, Identifiable {
             return title == otherTitle && artist == other.artist && album == other.album
         }
         return false
+    }
+
+    func sharesPlaybackTimeline(with other: NowPlayingSnapshot) -> Bool {
+        guard source.preferredIdentifier == other.source.preferredIdentifier else {
+            return false
+        }
+        if let processIdentifier = source.processIdentifier,
+           let otherProcessIdentifier = other.source.processIdentifier,
+           processIdentifier != otherProcessIdentifier {
+            return false
+        }
+
+        let metadata = [title, artist, album]
+        let otherMetadata = [other.title, other.artist, other.album]
+        if metadata.contains(where: { $0 != nil })
+            || otherMetadata.contains(where: { $0 != nil }) {
+            return metadata == otherMetadata
+        }
+
+        if let contentItemIdentifier,
+           let otherIdentifier = other.contentItemIdentifier {
+            return contentItemIdentifier == otherIdentifier
+        }
+
+        return source.processIdentifier == other.source.processIdentifier
     }
 }

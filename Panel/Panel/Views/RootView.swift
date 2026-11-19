@@ -11,10 +11,6 @@ struct RootView: View {
     @State private var contentSize: CGSize = .zero
     @State private var isDragging: Bool = false
     
-    @State private var barValue: Double = 1
-    @State private var isBarSliderActive: Bool = false
-    @State private var barAccentColor: Color = .white
-    @State private var isBarSliderDragging: Bool = false
     @State private var onBarHover: Bool = false
     
     private let panelRadiusRules = UnionPanelShape.RadiusRules(
@@ -73,7 +69,6 @@ struct RootView: View {
         .onContinuousHover{ phase in
             if phase == .ended {
                 controller.collapse()
-                Log.ui.info("Hover ended, collapse preset called")
             }
         }
         .frame(width: 1000, height: 400, alignment: .bottom)
@@ -153,7 +148,13 @@ struct RootView: View {
                     .transition(.collapseExpandTransition)
             }
             
-            bar
+            
+            MultiBarView()
+                .onHover{ hover in
+                    withAnimation (.custsmooth) {
+                        onBarHover = hover
+                    }
+                }
         }
     }
     
@@ -186,42 +187,15 @@ struct RootView: View {
     }
     
     
-    private var bar: some View {
-        BarView(
-            value: $barValue,
-            isSliderActive: $isBarSliderActive,
-            accentColor: $barAccentColor,
-            isSliderDragging: $isBarSliderDragging,
-            action: {
-                controller.showPreset(.home)
-            }
-        )
-        .background {
-            PlayerBarBridge(
-                value: $barValue,
-                isSliderActive: $isBarSliderActive,
-                accentColor: $barAccentColor,
-                isSliderDragging: $isBarSliderDragging
-            )
-        }
-        .onHover{ hover in
-            withAnimation (.custsmooth) {
-                onBarHover = hover
-            }
-        }
-    }
-    
-    
     private func selectAnimation(from previous: CGSize, to current: CGSize) -> Animation {
         if (
             current.width >= previous.width &&
             current.height >= previous.height
         ){
-            return .custbounsy
+            return .custbouncy
         }
         return .custsmooth
     }
-    
 }
 
 

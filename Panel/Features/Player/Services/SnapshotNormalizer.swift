@@ -24,6 +24,8 @@ nonisolated struct SnapshotNormalizer: Sendable {
 
     private(set) var previous: NowPlayingSnapshot?
     private(set) var lastSequence: UInt64?
+    private var sourceTimestampSnapshot: NowPlayingSnapshot?
+    private var latestSourceTimestamp: Date?
     private let maximumArtworkBytes = 6 * 1_024 * 1_024
     private let maximumArtworkDimension = 16_384
     private let maximumArtworkPixels = 64_000_000
@@ -62,9 +64,45 @@ nonisolated struct SnapshotNormalizer: Sendable {
                 previous = nil
                 return .idle
             }
-            let snapshot = try makeSnapshot(from: payload, receivedAt: receivedAt)
+            let sourceTimestamp = validTimestamp(
+                payload.timestampEpochMicros,
+                receivedAt: receivedAt
+            )
+            let snapshot = try makeSnapshot(
+                from: payload,
+                receivedAt: receivedAt,
+                sourceTimestamp: sourceTimestamp
+            )
+
+            if let sourceTimestampSnapshot,
+               snapshot.sharesPlaybackTimeline(with: sourceTimestampSnapshot),
+               let sourceTimestamp,
+               let latestSourceTimestamp,
+               sourceTimestamp < latestSourceTimestamp {
+                return nil
+            }
+
             if snapshot == previous {
                 return nil
+            }
+
+            if let sourceTimestamp {
+                if let sourceTimestampSnapshot,
+                   snapshot.sharesPlaybackTimeline(with: sourceTimestampSnapshot),
+                   let latestSourceTimestamp {
+                    self.latestSourceTimestamp = max(
+                        sourceTimestamp,
+                        latestSourceTimestamp
+                    )
+                } else {
+                    latestSourceTimestamp = sourceTimestamp
+                }
+                sourceTimestampSnapshot = snapshot
+            } else if sourceTimestampSnapshot.map({
+                !snapshot.sharesPlaybackTimeline(with: $0)
+            }) == true {
+                sourceTimestampSnapshot = nil
+                latestSourceTimestamp = nil
             }
             previous = snapshot
             return .active(snapshot)
@@ -80,11 +118,14 @@ nonisolated struct SnapshotNormalizer: Sendable {
     mutating func reset() {
         previous = nil
         lastSequence = nil
+        sourceTimestampSnapshot = nil
+        latestSourceTimestamp = nil
     }
 
     private func makeSnapshot(
         from payload: AdapterPayload,
-        receivedAt: Date
+        receivedAt: Date,
+        sourceTimestamp: Date?
     ) throws -> NowPlayingSnapshot {
         let pid = payload.processIdentifier
             .flatMap(Int32.init(exactly:))
@@ -127,7 +168,7 @@ nonisolated struct SnapshotNormalizer: Sendable {
             album: clean(payload.album),
             duration: duration,
             elapsedTime: elapsed,
-            refreshedAt: timestamp(payload.timestampEpochMicros, receivedAt: receivedAt),
+            refreshedAt: sourceTimestamp ?? receivedAt,
             playbackRate: playbackRate,
             artworkData: artworkData,
             artworkMIMEType: artworkMIMEType,
@@ -169,10 +210,13 @@ nonisolated struct SnapshotNormalizer: Sendable {
         return value.isFinite ? value : nil
     }
 
-    private func timestamp(_ microseconds: Int64?, receivedAt: Date) -> Date {
-        guard let seconds = seconds(microseconds) else { return receivedAt }
+    private func validTimestamp(
+        _ microseconds: Int64?,
+        receivedAt: Date
+    ) -> Date? {
+        guard let seconds = seconds(microseconds) else { return nil }
         let remote = Date(timeIntervalSince1970: seconds)
-        return abs(remote.timeIntervalSince(receivedAt)) <= 300 ? remote : receivedAt
+        return abs(remote.timeIntervalSince(receivedAt)) <= 300 ? remote : nil
     }
 
     private func validatedArtwork(base64: String?, mimeType: String?) throws -> Data? {

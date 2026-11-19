@@ -3,7 +3,7 @@
 import Observation
 import SwiftUI
 
-enum PanelPreset {
+enum PanelPreset: CustomStringConvertible {
     case collapsed
     case home
     case share
@@ -11,6 +11,18 @@ enum PanelPreset {
     case airdrop
     case player
     case settings
+    
+    var description: String {
+            switch self {
+            case .collapsed: return "Collapsed"
+            case .home: return "Home"
+            case .share: return "Share"
+            case .fastfolder: return "Fast Folder"
+            case .airdrop: return "AirDrop"
+            case .player: return "Player"
+            case .settings: return "Settings"
+            }
+        }
 }
 
 @Observable

@@ -4,9 +4,6 @@
 import os
 import AppKit
 import SwiftUI
-import ApplicationServices
-import CoreGraphics
-import CoreFoundation
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -98,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func repositionPanel(on panel: FloatingPanel) {
-        // Built-in screen is gone (e.g. clamshell mode) — hide the panel.
+        // Hide the panel when no screens are available.
         guard let screen = targetScreen() else {
             panel.orderOut(nil)
             return
@@ -109,19 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func targetScreen() -> NSScreen? {
-        // The panel must live on the MacBook's built-in display.
-        if let builtInScreen = NSScreen.screens.first(where: { screen in
-            guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-                return false
-            }
-            
-            return CGDisplayIsBuiltin(displayID) != 0
-        }) {
-            return builtInScreen
-        }
-        
-        // Fallback: primary screen.
-        return NSScreen.screens.first
+        NSScreen.main ?? NSScreen.screens.first
     }
     
     private func frame(for screen: NSScreen) -> NSRect {

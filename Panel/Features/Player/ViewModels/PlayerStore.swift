@@ -26,6 +26,10 @@ final class PlayerStore {
         presentedSnapshot?.isPlaying == true
     }
 
+    var isSynchronizingSeek: Bool {
+        recentSeekTargetTime != nil
+    }
+
     var isReconnecting: Bool {
         guard lastActiveSnapshot != nil else { return false }
         if connectionState == .reconnecting { return true }
@@ -35,27 +39,39 @@ final class PlayerStore {
 
     @ObservationIgnored private let provider: any SystemNowPlayingProviding
     @ObservationIgnored private let playbackController: any SystemPlaybackControlling
+    @ObservationIgnored private let playbackSourceOpener: any PlaybackSourceOpening
     @ObservationIgnored private let idleTransitionDelay: Duration
+    @ObservationIgnored private let seekGracePeriodDuration: TimeInterval
+    @ObservationIgnored private let seekConfirmationTolerance: TimeInterval
     @ObservationIgnored private var monitoringTask: Task<Void, Never>?
     @ObservationIgnored private var pendingIdleTask: Task<Void, Never>?
     @ObservationIgnored private var playbackCommandTask: Task<Void, Never>?
     @ObservationIgnored private var rawState: SystemNowPlayingState
     @ObservationIgnored private var lastActiveSnapshot: NowPlayingSnapshot?
+    @ObservationIgnored private var recentSeekTargetTime: TimeInterval?
+    @ObservationIgnored private var recentSeekDate: Date?
 
     init(
         provider: any SystemNowPlayingProviding,
         playbackController: any SystemPlaybackControlling,
+        playbackSourceOpener: (any PlaybackSourceOpening)? = nil,
         initialState: SystemNowPlayingState = .idle,
-        idleTransitionDelay: Duration = .milliseconds(550)
+        idleTransitionDelay: Duration = .milliseconds(550),
+        seekGracePeriodDuration: TimeInterval = 1.5,
+        seekConfirmationTolerance: TimeInterval = 0.75
     ) {
         self.provider = provider
         self.playbackController = playbackController
+        self.playbackSourceOpener = playbackSourceOpener
+            ?? WorkspacePlaybackSourceOpener()
         self.state = initialState
         self.rawState = initialState
         if case .active(let snapshot) = initialState {
             self.lastActiveSnapshot = snapshot
         }
         self.idleTransitionDelay = idleTransitionDelay
+        self.seekGracePeriodDuration = seekGracePeriodDuration
+        self.seekConfirmationTolerance = seekConfirmationTolerance
     }
 
     func startMonitoring() {
@@ -83,6 +99,7 @@ final class PlayerStore {
         pendingIdleTask = nil
         playbackCommandTask?.cancel()
         playbackCommandTask = nil
+        clearRecentSeek()
         isPerformingPlaybackCommand = false
         connectionState = .stopped
     }
@@ -100,16 +117,27 @@ final class PlayerStore {
     func playPrevious() { perform(.previousTrack) }
     func playNext() { perform(.nextTrack) }
 
+    func openPlaybackSource() {
+        guard let source = presentedSnapshot?.source else { return }
+        playbackSourceOpener.openPlaybackSource(source)
+    }
+
     func seek(toProgress progress: Double) {
         guard let snapshot = presentedSnapshot,
-              snapshot.isPlaying,
               let duration = snapshot.duration,
               duration.isFinite,
               duration > 0,
-              progress.isFinite else { return }
+              progress.isFinite,
+              !isPerformingPlaybackCommand else { return }
 
         let clampedProgress = min(max(0, progress), 1)
-        perform(.seek(to: duration * clampedProgress))
+        let position = duration * clampedProgress
+        recentSeekTargetTime = position
+        recentSeekDate = .now
+        let optimisticSnapshot = snapshot.settingElapsedTime(position)
+        state = .active(optimisticSnapshot)
+        lastActiveSnapshot = optimisticSnapshot
+        perform(.seek(to: position))
     }
 
     private func perform(_ command: PlaybackCommand) {
@@ -124,6 +152,9 @@ final class PlayerStore {
                 // Expected when the composition root stops the feature.
             } catch {
                 guard let self else { return }
+                if case .seek = command {
+                    self.clearRecentSeek()
+                }
                 let message = (error as? NowPlayingFailure)?.message
                     ?? error.localizedDescription
                 self.playbackCommandError = message
@@ -145,10 +176,11 @@ final class PlayerStore {
             self.connectionState = connectionState
 
         case .stateChanged(let newState):
-            rawState = newState
             switch newState {
             case .idle:
+                rawState = newState
                 guard case .active = state else {
+                    clearRecentSeek()
                     state = .idle
                     lastActiveSnapshot = nil
                     return
@@ -160,23 +192,63 @@ final class PlayerStore {
                     guard !Task.isCancelled,
                           let self,
                           self.rawState == .idle else { return }
+                    self.clearRecentSeek()
                     self.state = .idle
                     self.lastActiveSnapshot = nil
                     self.pendingIdleTask = nil
                 }
 
             case .active(let snapshot):
+                rawState = newState
                 pendingIdleTask?.cancel()
                 pendingIdleTask = nil
-                lastActiveSnapshot = snapshot
-                state = newState
+                if let presentedSnapshot,
+                   !presentedSnapshot.sharesPlaybackTimeline(with: snapshot) {
+                    clearRecentSeek()
+                }
+                let resolvedSnapshot = filteredAfterRecentSeek(snapshot, at: .now)
+                lastActiveSnapshot = resolvedSnapshot
+                state = .active(resolvedSnapshot)
 
-            case .unavailable:
+            case .unavailable(let failure):
+                rawState = newState
+                if !failure.isRetryableConnectionFailure {
+                    clearRecentSeek()
+                }
                 pendingIdleTask?.cancel()
                 pendingIdleTask = nil
                 state = newState
             }
         }
+    }
+
+    private func filteredAfterRecentSeek(
+        _ snapshot: NowPlayingSnapshot,
+        at date: Date
+    ) -> NowPlayingSnapshot {
+        guard let seekTarget = recentSeekTargetTime,
+              let seekDate = recentSeekDate else { return snapshot }
+
+        let elapsedSinceSeek = max(0, date.timeIntervalSince(seekDate))
+        guard elapsedSinceSeek < seekGracePeriodDuration else {
+            clearRecentSeek()
+            return snapshot
+        }
+
+        let expectedTime = seekTarget
+            + (snapshot.isPlaying ? elapsedSinceSeek * snapshot.playbackRate : 0)
+        let actualTime = snapshot.elapsed(at: date)
+
+        guard abs(actualTime - expectedTime) > seekConfirmationTolerance else {
+            return snapshot
+        }
+
+        return snapshot.settingElapsedTime(expectedTime, refreshedAt: date)
+    }
+
+    private func clearRecentSeek() {
+        recentSeekTargetTime = nil
+        recentSeekDate = nil
     }
 
     private func log(_ diagnostic: NowPlayingDiagnostic) {

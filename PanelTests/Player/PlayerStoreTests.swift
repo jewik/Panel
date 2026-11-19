@@ -60,6 +60,144 @@ final class PlayerStoreTests: XCTestCase {
         XCTAssertEqual(commands, [.seek(to: 60)])
     }
 
+    func testSeekWorksWhilePlaybackIsPaused() async {
+        let controller = PlaybackControllerDouble()
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .active(.pausedFixture)),
+            playbackController: controller,
+            initialState: .active(.pausedFixture)
+        )
+
+        store.seek(toProgress: 0.25)
+        await waitForCommandToFinish(store)
+
+        let commands = await controller.recordedCommands()
+        XCTAssertEqual(commands, [.seek(to: 30)])
+    }
+
+    func testArtworkActionOpensCurrentPlaybackSource() {
+        let opener = PlaybackSourceOpenerDouble()
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .active(.fixture)),
+            playbackController: PlaybackControllerDouble(),
+            playbackSourceOpener: opener,
+            initialState: .active(.fixture)
+        )
+
+        store.openPlaybackSource()
+
+        XCTAssertEqual(
+            opener.openedSources,
+            [NowPlayingSnapshot.fixture.source]
+        )
+    }
+
+    func testSeekKeepsOptimisticPositionThroughLateHelperSnapshots() async {
+        let provider = PlayerProviderDouble(state: .active(.fixture))
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture)
+        )
+        store.startMonitoring()
+        await waitForStateChange()
+
+        store.seek(toProgress: 0.75)
+        await waitForCommandToFinish(store)
+
+        XCTAssertEqual(
+            store.presentedSnapshot?.elapsedTime ?? -1,
+            90,
+            accuracy: 0.5
+        )
+
+        await provider.emit(.active(.fixture(
+            isPlaying: true,
+            elapsedTime: 12,
+            contentItemIdentifier: "stale-id"
+        )))
+        await waitForStateChange()
+
+        XCTAssertTrue(store.isSynchronizingSeek)
+        guard let filteredSnapshot = store.presentedSnapshot else {
+            return XCTFail("Expected a presented snapshot")
+        }
+        XCTAssertEqual(
+            filteredSnapshot.elapsed(),
+            90,
+            accuracy: 0.5
+        )
+
+        await provider.emit(.active(.fixture(
+            isPlaying: true,
+            elapsedTime: 90,
+            contentItemIdentifier: "confirmed-id"
+        )))
+        await waitForStateChange()
+
+        XCTAssertTrue(store.isSynchronizingSeek)
+
+        await provider.emit(.active(.fixture(
+            isPlaying: true,
+            elapsedTime: 12,
+            contentItemIdentifier: "late-stale-id"
+        )))
+        await waitForStateChange()
+
+        guard let lateFilteredSnapshot = store.presentedSnapshot else {
+            return XCTFail("Expected a presented snapshot")
+        }
+        XCTAssertEqual(lateFilteredSnapshot.elapsed(), 90, accuracy: 0.5)
+        store.stopMonitoring()
+    }
+
+    func testRecentSeekFilterExpiresAndAcceptsServicePosition() async {
+        let provider = PlayerProviderDouble(state: .active(.fixture))
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture),
+            seekGracePeriodDuration: 0.03
+        )
+        store.startMonitoring()
+        await waitForStateChange()
+
+        store.seek(toProgress: 0.75)
+        XCTAssertTrue(store.isSynchronizingSeek)
+
+        try? await Task.sleep(for: .milliseconds(60))
+        await provider.emit(.active(.fixture(isPlaying: true, elapsedTime: 12)))
+        await waitForStateChange()
+
+        XCTAssertFalse(store.isSynchronizingSeek)
+        XCTAssertEqual(store.presentedSnapshot?.elapsedTime, 12)
+        store.stopMonitoring()
+    }
+
+    func testTransientIdleDoesNotDropRecentSeekFilter() async {
+        let provider = PlayerProviderDouble(state: .active(.fixture))
+        let store = PlayerStore(
+            provider: provider,
+            playbackController: PlaybackControllerDouble(),
+            initialState: .active(.fixture),
+            idleTransitionDelay: .milliseconds(100)
+        )
+        store.startMonitoring()
+        await waitForStateChange()
+
+        store.seek(toProgress: 0.75)
+        await provider.emit(.idle)
+        await provider.emit(.active(.fixture(isPlaying: true, elapsedTime: 12)))
+        await waitForStateChange()
+
+        XCTAssertTrue(store.isSynchronizingSeek)
+        guard let snapshot = store.presentedSnapshot else {
+            return XCTFail("Expected a presented snapshot")
+        }
+        XCTAssertEqual(snapshot.elapsed(), 90, accuracy: 0.5)
+        store.stopMonitoring()
+    }
+
     func testIdleTransitionIsDelayed() async {
         let provider = PlayerProviderDouble(state: .active(.fixture))
         let store = PlayerStore(
@@ -216,11 +354,25 @@ private actor PlaybackControllerDouble: SystemPlaybackControlling {
     func recordedCommands() -> [PlaybackCommand] { commands }
 }
 
+@MainActor
+private final class PlaybackSourceOpenerDouble: PlaybackSourceOpening {
+    private(set) var openedSources: [PlaybackSource] = []
+
+    func openPlaybackSource(_ source: PlaybackSource) -> Bool {
+        openedSources.append(source)
+        return true
+    }
+}
+
 nonisolated private extension NowPlayingSnapshot {
     static let fixture = fixture(isPlaying: true)
     static let pausedFixture = fixture(isPlaying: false)
 
-    static func fixture(isPlaying: Bool) -> NowPlayingSnapshot {
+    static func fixture(
+        isPlaying: Bool,
+        elapsedTime: TimeInterval = 10,
+        contentItemIdentifier: String = "fixture"
+    ) -> NowPlayingSnapshot {
         NowPlayingSnapshot(
             source: PlaybackSource(
                 processIdentifier: 1,
@@ -232,13 +384,13 @@ nonisolated private extension NowPlayingSnapshot {
             artist: "Artist",
             album: nil,
             duration: 120,
-            elapsedTime: 10,
+            elapsedTime: elapsedTime,
             refreshedAt: .now,
             playbackRate: isPlaying ? 1 : 0,
             artworkData: nil,
             artworkMIMEType: nil,
             mediaType: "audio",
-            contentItemIdentifier: "fixture"
+            contentItemIdentifier: contentItemIdentifier
         )
     }
 }

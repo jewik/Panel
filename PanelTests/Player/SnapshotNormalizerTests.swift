@@ -49,6 +49,53 @@ final class SnapshotNormalizerTests: XCTestCase {
         XCTAssertEqual(try normalizer.normalize(idle), .idle)
     }
 
+    func testDropsOlderPlaybackTimestampWithoutSequence() throws {
+        var normalizer = SnapshotNormalizer()
+        let receivedAt = Date(timeIntervalSince1970: 1_800_000_020)
+        let confirmed = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","contentItemIdentifier":"confirmed-id","durationMicros":120000000,"elapsedTimeMicros":90000000,"timestampEpochMicros":1800000010000000}}"#
+        )
+        let stale = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","contentItemIdentifier":"stale-id","durationMicros":120000000,"elapsedTimeMicros":12000000,"timestampEpochMicros":1800000000000000}}"#
+        )
+
+        XCTAssertNotNil(try normalizer.normalize(confirmed, receivedAt: receivedAt))
+        XCTAssertNil(try normalizer.normalize(stale, receivedAt: receivedAt))
+        XCTAssertEqual(normalizer.previous?.elapsedTime, 90)
+    }
+
+    func testAcceptsNewerPlaybackTimestampWithoutSequence() throws {
+        var normalizer = SnapshotNormalizer()
+        let receivedAt = Date(timeIntervalSince1970: 1_800_000_020)
+        let first = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","elapsedTimeMicros":12000000,"timestampEpochMicros":1800000000000000}}"#
+        )
+        let newer = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","elapsedTimeMicros":90000000,"timestampEpochMicros":1800000010000000}}"#
+        )
+
+        XCTAssertNotNil(try normalizer.normalize(first, receivedAt: receivedAt))
+        XCTAssertNotNil(try normalizer.normalize(newer, receivedAt: receivedAt))
+        XCTAssertEqual(normalizer.previous?.elapsedTime, 90)
+    }
+
+    func testIdleDoesNotDiscardPlaybackTimestampWatermark() throws {
+        var normalizer = SnapshotNormalizer()
+        let receivedAt = Date(timeIntervalSince1970: 1_800_000_020)
+        let confirmed = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","contentItemIdentifier":"confirmed-id","elapsedTimeMicros":90000000,"timestampEpochMicros":1800000010000000}}"#
+        )
+        let idle = try decode(#"{"type":"data","diff":false,"payload":{}}"#)
+        let stale = try decode(
+            #"{"type":"data","diff":false,"payload":{"processIdentifier":7,"playing":true,"title":"Track","contentItemIdentifier":"stale-id","elapsedTimeMicros":12000000,"timestampEpochMicros":1800000000000000}}"#
+        )
+
+        XCTAssertNotNil(try normalizer.normalize(confirmed, receivedAt: receivedAt))
+        XCTAssertEqual(try normalizer.normalize(idle, receivedAt: receivedAt), .idle)
+        XCTAssertNil(try normalizer.normalize(stale, receivedAt: receivedAt))
+        XCTAssertNil(normalizer.previous)
+    }
+
     func testRejectsDiffAndUnsupportedProtocol() throws {
         var normalizer = SnapshotNormalizer()
         XCTAssertThrowsError(try normalizer.normalize(
