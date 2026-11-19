@@ -75,6 +75,23 @@ final class PlayerStoreTests: XCTestCase {
         XCTAssertEqual(commands, [.seek(to: 30)])
     }
 
+    func testArtworkActionOpensCurrentPlaybackSource() {
+        let opener = PlaybackSourceOpenerDouble()
+        let store = PlayerStore(
+            provider: PlayerProviderDouble(state: .active(.fixture)),
+            playbackController: PlaybackControllerDouble(),
+            playbackSourceOpener: opener,
+            initialState: .active(.fixture)
+        )
+
+        store.openPlaybackSource()
+
+        XCTAssertEqual(
+            opener.openedSources,
+            [NowPlayingSnapshot.fixture.source]
+        )
+    }
+
     func testSeekKeepsOptimisticPositionThroughLateHelperSnapshots() async {
         let provider = PlayerProviderDouble(state: .active(.fixture))
         let store = PlayerStore(
@@ -335,6 +352,16 @@ private actor PlaybackControllerDouble: SystemPlaybackControlling {
     }
 
     func recordedCommands() -> [PlaybackCommand] { commands }
+}
+
+@MainActor
+private final class PlaybackSourceOpenerDouble: PlaybackSourceOpening {
+    private(set) var openedSources: [PlaybackSource] = []
+
+    func openPlaybackSource(_ source: PlaybackSource) -> Bool {
+        openedSources.append(source)
+        return true
+    }
 }
 
 nonisolated private extension NowPlayingSnapshot {

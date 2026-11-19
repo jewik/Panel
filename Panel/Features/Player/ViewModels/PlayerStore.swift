@@ -39,6 +39,7 @@ final class PlayerStore {
 
     @ObservationIgnored private let provider: any SystemNowPlayingProviding
     @ObservationIgnored private let playbackController: any SystemPlaybackControlling
+    @ObservationIgnored private let playbackSourceOpener: any PlaybackSourceOpening
     @ObservationIgnored private let idleTransitionDelay: Duration
     @ObservationIgnored private let seekGracePeriodDuration: TimeInterval
     @ObservationIgnored private let seekConfirmationTolerance: TimeInterval
@@ -53,6 +54,7 @@ final class PlayerStore {
     init(
         provider: any SystemNowPlayingProviding,
         playbackController: any SystemPlaybackControlling,
+        playbackSourceOpener: (any PlaybackSourceOpening)? = nil,
         initialState: SystemNowPlayingState = .idle,
         idleTransitionDelay: Duration = .milliseconds(550),
         seekGracePeriodDuration: TimeInterval = 1.5,
@@ -60,6 +62,8 @@ final class PlayerStore {
     ) {
         self.provider = provider
         self.playbackController = playbackController
+        self.playbackSourceOpener = playbackSourceOpener
+            ?? WorkspacePlaybackSourceOpener()
         self.state = initialState
         self.rawState = initialState
         if case .active(let snapshot) = initialState {
@@ -112,6 +116,11 @@ final class PlayerStore {
     func togglePlayback() { perform(.togglePlayPause) }
     func playPrevious() { perform(.previousTrack) }
     func playNext() { perform(.nextTrack) }
+
+    func openPlaybackSource() {
+        guard let source = presentedSnapshot?.source else { return }
+        playbackSourceOpener.openPlaybackSource(source)
+    }
 
     func seek(toProgress progress: Double) {
         guard let snapshot = presentedSnapshot,

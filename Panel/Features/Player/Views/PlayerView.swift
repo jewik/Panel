@@ -29,7 +29,15 @@ struct PlayerView: View {
         isReconnecting: Bool
     ) -> some View {
         HStack(alignment: .center, spacing: 0) {
-            artwork(snapshot.artworkData)
+            Button(action: store.openPlaybackSource) {
+                artwork(snapshot.artworkData)
+                    .playerArtworkFlip(
+                        identity: PlayerArtworkIdentity(data: snapshot.artworkData)
+                    )
+            }
+                .buttonStyle(.plain)
+                .help("Open \(snapshot.source.displayName)")
+                .accessibilityLabel("Open \(snapshot.source.displayName)")
                 .overlay(alignment: .topTrailing) {
                     if isReconnecting {
                         ReconnectingMarker()

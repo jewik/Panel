@@ -8,7 +8,7 @@ struct PlayerPlaybackView: View {
     @State private var duration: TimeInterval = 0
     @State private var elapsedTime: TimeInterval = 0
     @State private var accentColor: Color = .white
-    @State private var artworkIdentity: PlaybackArtworkIdentity?
+    @State private var artworkIdentity: PlayerArtworkIdentity?
     @State private var isSliderActive = false
     @State private var isSliderDragging = false
     @State private var isHovered = false
@@ -108,7 +108,7 @@ struct PlayerPlaybackView: View {
         isSliderActive = true
         duration = snapshotDuration
 
-        let currentArtworkIdentity = PlaybackArtworkIdentity(snapshot: snapshot)
+        let currentArtworkIdentity = PlayerArtworkIdentity(data: snapshot.artworkData)
         if currentArtworkIdentity != artworkIdentity {
             artworkIdentity = currentArtworkIdentity
             accentColor = PlaybackArtworkAccentColor.color(from: snapshot.artworkData)
@@ -146,21 +146,6 @@ struct PlayerPlaybackView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         }
         return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-private struct PlaybackArtworkIdentity: Equatable {
-    let trackID: String
-    let byteCount: Int
-    let prefix: Data
-    let suffix: Data
-
-    init(snapshot: NowPlayingSnapshot) {
-        let data = snapshot.artworkData ?? Data()
-        trackID = snapshot.id
-        byteCount = data.count
-        prefix = Data(data.prefix(16))
-        suffix = Data(data.suffix(16))
     }
 }
 
